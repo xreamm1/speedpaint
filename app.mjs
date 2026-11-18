@@ -97,6 +97,7 @@ async function load(image) {
     demoVideo.pause();
     document.body.classList.add('has-photo');
     playback.after(status);
+    if (!ready) window.scrollTo(0,0);
     dimensions.textContent = canvas.width+' × '+canvas.height+' px';
     ready = true;
     wipe();
