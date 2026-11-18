@@ -91,9 +91,50 @@ export function plan(source, brush, detail) {
         const point = neighbors.reduce(([x,y],p)=>[x+p%w,y+Math.floor(p/w)],[0,0]);
         return point.map(n=>n/neighbors.length+(random()-.5)*.9*unit);
       });
-      marks.push({points, width:Math.max(.75,1.4*unit)*(.8+random()*.45), color:'#463b3e', opacity:.28+random()*.46});
+      const length = path.length;
+      marks.push({points, length, width:Math.max(.85,1.7*unit)*(.78+random()*.55),
+        color:'#514740', opacity:.34+random()*.38, pressure:random(), pace:.7+random()*.65});
     }
-    return marks.sort((a,b)=>b.points.length-a.points.length).slice(0,65+Math.round(detail*2));
+    marks.sort((a,b)=>b.length-a.length);
+    const candidates = marks.slice(0,24+Math.round(detail*.53));
+    const gestures = [];
+    const distance = (a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+    let hand;
+    while (candidates.length) {
+      let best = Infinity;
+      let selected = 0;
+      let reverse = false;
+      for (let i=0; hand && i<candidates.length; i++) {
+        const {points,length} = candidates[i];
+        const first = distance(hand,points[0]);
+        const last = distance(hand,points.at(-1));
+        const score = Math.min(first,last)-length*.48;
+        if (score<best) {
+          best = score;
+          selected = i;
+          reverse = last<first;
+        }
+      }
+      const [mark] = candidates.splice(selected,1);
+      if (reverse) mark.points.reverse();
+      const first = mark.points[0], last = mark.points.at(-1);
+      if (mark.length>36*unit && gestures.length<19 && random()<.57) {
+        const offset = (1+random()*2)*Math.max(.6,unit)*(random()<.5?-1:1);
+        const heading = Math.atan2(last[1]-first[1],last[0]-first[0]);
+        const offsetPoints = mark.points.filter((_,i)=>i%3===0).map(([x,y],i,points)=>{
+          const shift = offset*Math.sin(Math.PI*i/(points.length-1)+.45);
+          return [x-Math.sin(heading)*shift,y+Math.cos(heading)*shift];
+        });
+        if (offsetPoints.length>2) {
+          gestures.push({...mark, points:offsetPoints, width:mark.width*.68, opacity:mark.opacity*.32,
+            lift: hand ? distance(hand,first) : 0, pace:.60});
+          hand = offsetPoints.at(-1);
+        }
+      }
+      gestures.push({...mark,lift:hand?distance(hand,first):0});
+      hand = last;
+    }
+    return gestures;
   }
 
   function paint(size, blur, opacity, fine) {
@@ -158,7 +199,29 @@ export function stroke(ctx, mark, fraction = 1) {
   ctx.fillStyle = ctx.strokeStyle = color;
   ctx.lineCap = ctx.lineJoin = 'round';
   ctx.beginPath();
-  if (points.length===1) {
+  if (mark.pressure!==undefined && points.length>1) {
+    // Build a single pencil silhouette so overlapping segments keep their translucency.
+    const left = [], right = [];
+    for (let i=0; i<=Math.ceil(distance); i++) {
+      const step = Math.max(0,Math.min(i-1,points.length-2));
+      const a = points[step], b = points[step+1];
+      const t = Math.max(0,Math.min(1,Math.min(i,distance)-step));
+      const [x,y] = [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+      const before = points[Math.max(0,i-2)], after = points[Math.min(points.length-1,i+1)];
+      const heading = Math.atan2(after[1]-before[1],after[0]-before[0])+Math.PI/2;
+      const u = Math.min(i,distance)/(points.length-1);
+      const radius = width*.5*(.20+.80*Math.pow(Math.sin(Math.PI*u),.52))*
+        (.83+.17*Math.sin(i*.49+mark.pressure*6));
+      const dx = Math.cos(heading)*radius, dy = Math.sin(heading)*radius;
+      left.push([x+dx,y+dy]);
+      right.push([x-dx,y-dy]);
+    }
+    ctx.moveTo(...left[0]);
+    for (const point of left) ctx.lineTo(...point);
+    for (const point of right.reverse()) ctx.lineTo(...point);
+    ctx.closePath();
+    ctx.fill();
+  } else if (points.length===1) {
     ctx.arc(...points[0],width*.5*Math.sqrt(fraction),0,Math.PI*2);
     ctx.fill();
   } else {

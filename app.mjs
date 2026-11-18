@@ -9,8 +9,8 @@ const ctx = canvas.getContext('2d',{alpha:false});
 const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
-const limits = [0, .23, .54, 1];
-const duration = 18000;
+const limits = [0, .34, .62, 1];
+const duration = 24000;
 const formats = ['video/webm;codecs=vp8','video/webm','video/mp4'];
 const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
   formats.find(type=>MediaRecorder.isTypeSupported(type));
@@ -102,8 +102,10 @@ function prepare() {
       for (let i=1; i<mark.points.length; i++) {
         length += Math.hypot(mark.points[i][0]-mark.points[i-1][0],mark.points[i][1]-mark.points[i-1][1]);
       }
-      end += 5+Math.sqrt(length)*(stage===0?3:1);
-      return end;
+      const lift = stage===0 ? Math.min(15,Math.sqrt(mark.lift || 0)*.85) : 0;
+      const begin = end+lift;
+      end = begin+(5+Math.sqrt(length)*(stage===0?3:1))*(mark.pace || 1);
+      return {begin,end};
     });
     return {marks,timing,end};
   });
@@ -118,11 +120,11 @@ function render(fraction) {
   }
   const {marks,timing,end} = sequence[phase];
   const value = end*(fraction-limits[phase])/(limits[phase+1]-limits[phase]);
-  while (index<marks.length && (timing[index]<=value || fraction===1)) stroke(ink,marks[index++]);
+  while (index<marks.length && (timing[index].end<=value || fraction===1)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0);
   if (index<marks.length) {
-    const from = timing[index-1] || 0;
-    const t = Math.max(0,(value-from)/(timing[index]-from));
+    const {begin,end: stop} = timing[index];
+    const t = Math.max(0,(value-begin)/(stop-begin));
     const eased = t*t*(3-2*t);
     if (eased>0) stroke(ctx,marks[index],eased);
   }
