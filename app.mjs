@@ -79,19 +79,39 @@ function showFocus() {
   ctx.strokeStyle='#f05b93';
   ctx.stroke();
 }
-function nib(point,opacity=1) {
+function nib(point,opacity=1,mark,contact=false,heading=0) {
   if (!point) return;
+  const scale=Math.max(.65,Math.max(canvas.width,canvas.height)/850);
+  const wide=Boolean(mark?.clip || mark?.paintColors);
+  ctx.save();
+  ctx.translate(...point);
+  ctx.rotate((wide ? -1.05 : -1.15)+Math.sin(heading)*.16);
+  ctx.scale(scale,scale);
   ctx.globalAlpha=opacity;
+  ctx.lineCap='round';
+  ctx.lineWidth=wide?12:9;
+  ctx.strokeStyle='#292631';
   ctx.beginPath();
-  ctx.arc(...point,Math.max(2,Math.min(8,Math.max(canvas.width,canvas.height)/240)),0,Math.PI*2);
-  ctx.lineWidth=1.5;
-  ctx.strokeStyle='#f9f3ed';
+  ctx.moveTo(13,0);
+  ctx.lineTo(wide?49:41,0);
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(...point,1.35,0,Math.PI*2);
-  ctx.fillStyle='#383039';
+  ctx.moveTo(17,-2);
+  ctx.lineTo(wide?48:40,-2);
+  ctx.lineWidth=1.5;
+  ctx.strokeStyle='#ffffff78';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.quadraticCurveTo(wide?4:8,wide?-6:-3,13,wide?-5:-4);
+  ctx.lineTo(13,wide?5:4);
+  ctx.quadraticCurveTo(wide?4:8,wide?5:3,0,0);
+  ctx.fillStyle=contact && mark ? mark.color : '#ded0c2';
   ctx.fill();
-  ctx.globalAlpha=1;
+  ctx.lineWidth=.8;
+  ctx.strokeStyle='#302932';
+  ctx.stroke();
+  ctx.restore();
 }
 async function load(image) {
   if (!image || exporting) return;
@@ -263,7 +283,7 @@ function prepare() {
 }
 function render(fraction) {
   if (restoration) {
-    nib(restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt))));
+    nib(restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt))),.7);
     updateProgress(fraction);
     return;
   }
@@ -277,12 +297,12 @@ function render(fraction) {
   const {marks,timing,end} = sequence[phase];
   const stopAt=limits[phase+1];
   const value = end*(Math.min(fraction,stopAt)-limits[phase])/(stopAt-limits[phase]);
-  while (index<marks.length && (timing[index].end<=value || fraction>=stopAt)) stroke(ink,marks[index++]);
+  while (index<marks.length && (timing[index].end<=value+1e-7 || fraction>=stopAt)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0);
   if (exact.checked && fraction>=restoreAt) {
     const [x,y]=sequence[phase].tail || [reference.width*.5,reference.height*.5];
     restoration=restorePlan(ctx,original,[x*canvas.width/reference.width,y*canvas.height/reference.height]);
-    nib(restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt))));
+    nib(restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt))),.7);
     updateProgress(fraction);
     return;
   }
@@ -300,7 +320,7 @@ function render(fraction) {
     if (eased>0) {
       ctx.save();
       ctx.scale(scaleX,scaleY);
-      stroke(ctx,marks[index],eased,phase<2?1:Math.min(1,t*3)**1.4);
+      stroke(ctx,marks[index],eased);
       ctx.restore();
     } else if (value<begin && from && begin>depart) {
       const t=(value-depart)/(begin-depart);
@@ -309,10 +329,27 @@ function render(fraction) {
       tip[1]=from[1]*scaleY+(tip[1]-from[1]*scaleY)*lift;
       if (gap>Math.max(reference.width,reference.height)*.14) opacity=1-.7*Math.sin(Math.PI*t);
     }
-    nib(tip,opacity);
+    const trailing=points[Math.max(0,Math.floor(along)-1)];
+    const leading=points[Math.min(points.length-1,Math.ceil(along)+1)];
+    const heading=Math.atan2(leading[1]-trailing[1],leading[0]-trailing[0]);
+    nib(tip,eased>0?opacity:opacity*.70,marks[index],eased>0,heading);
   }
   phases.forEach((item,i)=>item.classList.toggle('active',i===Math.min(2,phase)));
   updateProgress(fraction);
+}
+
+// At normal speed, even a late frame must show the brush in contact before a stroke is completed.
+function keepContactVisible(next,rate) {
+  const stage=sequence[phase];
+  const mark=stage?.timing[index];
+  if (rate>1 || restoration || !mark) return next;
+  const start=limits[phase]*duration;
+  const span=(limits[phase+1]-limits[phase])*duration/stage.end;
+  const contact=start+(mark.begin+(mark.end-mark.begin)*.5)*span;
+  const end=start+mark.end*span;
+  if(time<contact && next>contact) return contact;
+  if(time<end && next>end) return end;
+  return next;
 }
 
 function play(rate, done) {
@@ -320,7 +357,10 @@ function play(rate, done) {
   running = true;
   controls();
   function tick(now) {
-    if (previous) time = Math.min(duration,time+Math.min(67,now-previous)*rate());
+    if (previous) {
+      const speed=rate();
+      time=keepContactVisible(Math.min(duration,time+Math.min(67,now-previous)*speed),speed);
+    }
     previous = now;
     render(time/duration);
     if (time<duration) {
@@ -387,7 +427,7 @@ download.addEventListener('click',()=>{
   }
   try {
     prepare();
-    stream = canvas.captureStream(30);
+    stream = canvas.captureStream(60);
     const videoBitsPerSecond = Math.max(5000000,Math.min(80000000,Math.round(canvas.width*canvas.height*10)));
     recorder = new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond});
     recorder.ondataavailable = event=>{ if (event.data.size) chunks.push(event.data); };
