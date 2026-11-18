@@ -1,8 +1,8 @@
 import {paper,plan,stroke} from './paint.mjs';
 
 const $ = id => document.getElementById(id);
-const {canvas,file,surface,drop,source,thumb,filename,dimensions,progress,speed,brush,detail,start,pause,reset,status} =
-  Object.fromEntries('canvas file surface drop source thumb filename dimensions progress speed brush detail start pause reset status'.split(' ').map(id=>[id,$(id)]));
+const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,pause,reset,status} =
+  Object.fromEntries('canvas file surface drop source filename dimensions progress speed brush detail start pause reset status'.split(' ').map(id=>[id,$(id)]));
 const download = $('export');
 const phases = [...document.querySelectorAll('ol li')];
 const ctx = canvas.getContext('2d',{alpha:false});
@@ -27,7 +27,7 @@ function controls() {
   file.disabled = busy;
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
-  start.textContent = time>=duration ? '↻  Заново' : time>0 ? '▶  Продолжить' : '▶  Старт';
+  start.textContent = time>=duration ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
 }
 function wipe() {
   time = phase = index = 0;
@@ -58,7 +58,6 @@ async function load(image) {
     ref.fillStyle = paper;
     ref.fillRect(0,0,reference.width,reference.height);
     ref.drawImage(picture,0,0,reference.width,reference.height);
-    thumb.src = reference.toDataURL('image/jpeg',.65);
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = false;

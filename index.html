@@ -3,55 +3,51 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#151820">
-<title>Спидпеинт — мастерская</title>
+<meta name="theme-color" content="#141414">
+<title>Спидпеинт</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 <script type="module" src="./app.mjs"></script>
 </head>
 <body>
-<header><div class="brand"><span class="logo" aria-hidden="true">✦</span><h1>Спидпеинт</h1></div><span class="privacy">Фото обрабатывается на устройстве</span></header>
 <main>
+<header>
+<h1>Спидпеинт</h1>
+<div id="source" hidden><span id="filename"></span><span id="dimensions"></span></div>
+<div class="upload">
+<input type="file" id="file" accept="image/jpeg,image/png,image/webp" aria-label="Выбрать фото">
+<label for="file" class="file-button">Выбрать фото</label>
+</div>
+</header>
+<div class="studio">
 <section class="workspace" aria-label="Холст">
-<div class="bar"><strong>Холст</strong><span id="dimensions">—</span></div>
 <div id="surface">
 <label id="drop" for="file">
-<span class="upload-icon" aria-hidden="true">↑</span>
 <strong>Перетащите фото сюда</strong>
-<span class="choose">Выбрать фото</span>
 <small>JPG, PNG, WEBP</small>
 </label>
 <canvas id="canvas" hidden aria-label="Текущий рисунок"></canvas>
 </div>
 <div class="timeline">
-<ol><li>Набросок</li><li>Подмалёвок</li><li>Детализация</li></ol>
 <progress id="progress" value="0" max="1" aria-label="Прогресс рисования"></progress>
+<ol><li>Набросок</li><li>Подмалёвок</li><li>Детализация</li></ol>
 </div>
 </section>
-<aside>
-<section class="panel">
-<h2>Источник</h2>
-<input type="file" id="file" accept="image/jpeg,image/png,image/webp">
-<label for="file" class="file-button">↑ &nbsp; Выбрать фото</label>
-<div id="source" hidden><img id="thumb" alt=""><span id="filename"></span></div>
-</section>
-<section class="panel">
-<h2>Кисть и темп</h2>
+<aside aria-label="Настройки и управление">
 <label class="setting" for="speed">Скорость <output for="speed">1×</output></label>
 <input id="speed" type="range" min=".25" max="4" step=".25" value="1">
 <label class="setting" for="brush">Размер кисти <output for="brush">100%</output></label>
 <input id="brush" type="range" min="60" max="160" step="5" value="100">
 <label class="setting" for="detail">Детализация <output for="detail">65%</output></label>
 <input id="detail" type="range" min="0" max="100" step="5" value="65">
-</section>
-<section class="panel controls">
-<h2>Воспроизведение</h2>
-<button id="start" class="primary" disabled>▶ &nbsp; Старт</button>
+<div class="controls">
+<button id="start" class="primary" disabled>Старт</button>
 <div class="pair"><button id="pause" disabled>Пауза</button><button id="reset" disabled>Сбросить</button></div>
-<button id="export" disabled>↓ &nbsp; Экспорт видео</button>
-<p id="status" role="status">Загрузите фото, чтобы начать.</p>
-</section>
+<button id="export" disabled>Экспорт видео</button>
+</div>
+<p id="status" role="status">Фото обрабатывается на устройстве.</p>
 </aside>
+</div>
 </main>
 </body>
 </html>
