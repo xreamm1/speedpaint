@@ -7,6 +7,9 @@ const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,
   Object.fromEntries('canvas file surface drop source filename dimensions progress speed brush detail start reset status replace choose playback downloads clock'.split(' ').map(id=>[id,$(id)]));
 const download = $('export');
 const savePng = $('save-png');
+const demo = $('demo');
+const demoVideo = $('demo-video');
+const demoToggle = $('demo-toggle');
 const phases = [...document.querySelectorAll('ol li')];
 const ctx = canvas.getContext('2d');
 const reference = document.createElement('canvas');
@@ -89,7 +92,8 @@ async function load(image) {
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
-    drop.hidden = true;
+    drop.hidden = demo.hidden = choose.hidden = true;
+    demoVideo.pause();
     document.body.classList.add('has-photo');
     playback.after(status);
     dimensions.textContent = canvas.width+' × '+canvas.height+' px';
@@ -110,6 +114,17 @@ async function load(image) {
 file.addEventListener('change',()=>load(file.files[0]));
 choose.addEventListener('click',()=>file.click());
 replace.addEventListener('click',()=>file.click());
+function syncDemoButton() {
+  demoToggle.textContent=demoVideo.paused?'▶':'Ⅱ';
+  demoToggle.setAttribute('aria-label',demoVideo.paused?'Воспроизвести пример':'Приостановить пример');
+}
+demoVideo.addEventListener('play',syncDemoButton);
+demoVideo.addEventListener('pause',syncDemoButton);
+demoToggle.addEventListener('click',()=>{
+  if (demoVideo.paused) demoVideo.play().catch(syncDemoButton);
+  else demoVideo.pause();
+});
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) demoVideo.play().catch(syncDemoButton);
 surface.addEventListener('dragover',event=>{
   event.preventDefault();
   if (!exporting) surface.classList.add('over');

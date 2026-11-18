@@ -3,12 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#030203">
+<meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="preload" href="./studio-art.avif" as="image">
-<link rel="stylesheet" href="./style.css?v=glass">
-<script type="module" src="./app.mjs?v=glass"></script>
+<link rel="stylesheet" href="./style.css?v=graphite">
+<script type="module" src="./app.mjs?v=graphite"></script>
 </head>
 <body>
 <main>
@@ -18,20 +17,26 @@
 <span>Speedpaint</span>
 </div>
 <div id="source" hidden><span id="filename"></span><span id="dimensions"></span></div>
+<button id="choose" class="primary">Выбрать фото</button>
 <button id="replace" hidden>Заменить фото</button>
 <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
 </header>
+<div id="demo" class="demo" aria-label="Пример рисования">
+<video id="demo-video" muted playsinline loop preload="metadata" poster="./demo.webp" aria-label="Пример спидпеинта яблока">
+<source src="./demo.webm" type="video/webm">
+</video>
+<button id="demo-toggle" type="button" aria-label="Воспроизвести пример">▶</button>
+</div>
 <div class="studio">
 <section class="workspace" aria-label="Холст">
 <div id="surface">
 <div id="drop">
-<h1>Speedpaint</h1>
-<p class="intro">Загрузите фото и посмотрите, как из наброска и мазков складывается рисунок. Готовый процесс можно скачать как видео.</p>
-<div class="upload-options">
-<button id="choose" class="primary">Выбрать фото</button>
-<small>Или перетащите JPG, PNG или WEBP</small>
-</div>
+<h1>Рисование по фото</h1>
+<div class="upload-card">
+<h2>Загрузите изображение</h2>
+<p class="intro">Перетащите JPG, PNG или WEBP сюда или выберите файл в шапке. Speedpaint превратит фото в рисунок и запишет процесс.</p>
 <p id="status" role="status">Фото обрабатывается на устройстве.</p>
+</div>
 </div>
 <canvas id="canvas" hidden aria-label="Текущий рисунок"></canvas>
 </div>

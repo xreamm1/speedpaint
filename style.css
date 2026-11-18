@@ -1,45 +1,46 @@
 *{box-sizing:border-box}
-:root{color-scheme:dark;--ink:#fbf5f9;--muted:#c8b7c5;--paper:#0b080f;--line:#e9c6df35;--accent:#f2acd7;--panel:#231524;--canvas:#120d16;font:15px system-ui,sans-serif;color:var(--ink)}
+:root{color-scheme:dark;--ink:#f7f7f8;--muted:#b6b3ba;--paper:#0b0b0d;--line:#303036;--accent:#f05b93;--panel:#222225;--canvas:#101013;font:15px system-ui,sans-serif;color:var(--ink)}
 body{margin:0;min-height:100vh;background:var(--paper)}
-body::before{content:"";position:fixed;inset:0;pointer-events:none;background:url(./mist-dark.png) center / 100% 100% no-repeat;opacity:.30}
-body:not(.has-photo)::before{opacity:1;background:
-  linear-gradient(180deg,#150f25a8 0%,#150f2525 27%,#150f2510 60%,#100c21b8 100%),
-  url(./studio-art.avif) center / cover no-repeat}
+body.has-photo::before{content:"";position:fixed;inset:0;pointer-events:none;background:url(./mist-dark.png) center / 100% 100% no-repeat;opacity:.12}
 main{position:relative;max-width:1560px;margin:auto;padding:18px clamp(16px,4vw,58px) 36px}
 header{min-height:68px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding-bottom:14px}
 h1,h2,p{margin:0}
 h1{font-size:clamp(30px,4vw,50px);line-height:1;letter-spacing:-.065em;font-weight:680;text-shadow:0 1px 5px #000}
 .wordmark{display:flex;align-items:center;gap:9px;font-size:21px;font-weight:750;letter-spacing:-.04em}
 .wordmark svg{width:31px;height:31px;flex:none}
-body:not(.has-photo) main{min-height:100svh;display:flex;flex-direction:column}
-body:not(.has-photo) header{border-bottom:0;min-height:55px;text-shadow:0 2px 14px #0a0718}
-body:not(.has-photo) .studio{flex:1;display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;padding-top:0}
+body:not(.has-photo) main{max-width:1200px;min-height:100svh}
+body:not(.has-photo) header{min-height:54px}
+.demo{position:relative;isolation:isolate;display:grid;place-items:center;height:clamp(210px,40vw,440px);margin:12px calc(-1 * clamp(16px,4vw,58px)) 0;
+  overflow:hidden;border-block:1px solid #24232a;background:#0d0b13}
+.demo::before{content:"";position:absolute;inset:-22px;z-index:-1;background:url(./demo.webp) center / cover no-repeat;
+  filter:blur(22px) brightness(.27) saturate(.8)}
+.demo::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(0deg,var(--paper) 0%,#16102212 34%,#25133328 100%)}
+.demo video{width:100%;height:100%;min-height:0;object-fit:contain;filter:brightness(.64) saturate(.86)}
+#demo-toggle{position:absolute;z-index:1;top:12px;right:clamp(18px,4vw,48px);width:42px;height:42px;
+  padding:0;display:grid;place-items:center;border:0;border-radius:50%;background:#f4f3f6;color:#151419;font-size:15px;font-weight:750}
+body:not(.has-photo) .studio{grid-template-columns:minmax(0,1fr);padding-top:10px}
 body:not(.has-photo) aside{display:none}
 body:not(.has-photo) .workspace{display:grid;align-items:stretch}
-body:not(.has-photo) #surface{justify-items:start;min-height:0;border:0;border-radius:0;padding:clamp(20px,4vh,42px) 0;background:none}
+body:not(.has-photo) #surface{justify-items:stretch;min-height:0;border:0;border-radius:0;padding:0;background:none}
 body:not(.has-photo) #surface.over{outline:none}
-#replace{margin-left:auto;flex:none;background:var(--panel)}
+#replace,#choose{margin-left:auto;flex:none}
+#replace{background:var(--panel)}
 #source{min-width:0;display:flex;gap:10px;font-size:12px;color:var(--muted)}
 #filename{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 #dimensions{white-space:nowrap}
 .studio{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,19%);gap:clamp(14px,2vw,26px);padding-top:17px;align-items:start}
-#surface{min-height:clamp(320px,59vh,740px);display:grid;place-items:center;padding:16px;border:1px solid var(--line);border-radius:18px;background:radial-gradient(ellipse at 45% 35%,#47223f70,transparent 70%),var(--canvas)}
-#surface:has(canvas:not([hidden])){background:#080609}
+#surface{min-height:clamp(320px,59vh,740px);display:grid;place-items:center;padding:16px;border:1px solid var(--line);border-radius:11px;background:var(--canvas)}
 #surface.over{outline:2px dashed var(--accent);outline-offset:-8px}
 #surface.over:has(canvas:not([hidden])){outline-color:#d7b6ce}
-#drop{display:flex;flex-direction:column;justify-content:center;gap:25px;width:min(100%,480px);min-height:390px;
-  padding:clamp(25px,4vw,39px);border:2px solid #ffebf8c7;border-radius:20px;
-  background:#0e0d14ab;backdrop-filter:blur(24px) saturate(1.15);
-  box-shadow:0 22px 64px #0f061d45;transition:border-color .16s ease}
-#surface.over #drop{border-color:#ff8ed1}
-#drop h1{font-size:clamp(39px,5vw,64px);font-weight:750;text-shadow:none}
-.intro{max-width:370px;color:#eee1ed;font-size:clamp(15px,1.5vw,18px);line-height:1.65}
-.upload-options{display:flex;align-items:flex-start;flex-direction:column;gap:10px}
-#choose{padding:13px 18px;border-radius:9px;background:#fff6fc;color:#231827;border-color:#fff2fb;font-weight:700;font-size:14px}
-#choose:not(:disabled):hover{background:#ffdbef;border-color:#ffdbef}
-#drop small,#drop #status{color:#d8c6d5}
-#drop #status{margin:0}
-small{font-size:12px;color:var(--muted)}
+#drop{display:grid;gap:16px;min-width:0}
+#drop h1{font-size:clamp(29px,4.4vw,49px);font-weight:750;text-shadow:none}
+.upload-card{padding:clamp(14px,2.3vw,25px);border:1px solid #29292d;border-radius:8px;background:var(--panel)}
+.upload-card h2{margin-bottom:7px;font-size:19px}
+#surface.over .upload-card{border-color:var(--accent)}
+.intro{max-width:620px;color:var(--muted);line-height:1.55}
+#choose{padding:10px 15px;border-radius:999px;background:#b91d64;border-color:#db5b913d;color:white;font-weight:700;font-size:13px}
+#choose:not(:disabled):hover{background:#d12b76}
 canvas{display:block;max-width:100%;max-height:78vh;width:auto;height:auto;object-fit:contain}
 .timeline{padding-top:13px}
 ol{position:relative;height:27px;padding:0;margin:0;list-style:none;font-size:12px;color:var(--muted)}
@@ -50,7 +51,7 @@ progress{display:block;width:100%;height:4px;border:0;border-radius:4px;overflow
 progress::-webkit-progress-bar{background:var(--line)}
 progress::-webkit-progress-value{background:var(--accent)}
 progress::-moz-progress-bar{background:var(--accent)}
-aside{border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#4d254875,#1b1420d9 75%);backdrop-filter:blur(14px);padding:17px clamp(15px,2vw,22px) 19px}
+aside{border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:17px clamp(15px,2vw,22px) 19px}
 h2{font-size:17px;letter-spacing:-.025em;font-weight:650;margin-bottom:18px}
 .setting{display:flex;justify-content:space-between;gap:8px;font-size:13px}
 output{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -64,23 +65,22 @@ input[type=range]:disabled{cursor:default}
 .speed output{min-width:37px}
 #clock{margin-left:auto;white-space:nowrap;color:var(--muted);font:12px ui-monospace,monospace}
 button{display:block;border:1px solid var(--line);border-radius:7px;padding:8px 10px;color:var(--ink);background:var(--panel);font:540 13px system-ui;text-align:center;cursor:pointer}
-.primary{background:var(--accent);border-color:var(--accent);color:#21121d}
+.primary{background:var(--accent);border-color:var(--accent);color:#200c16}
 button:not(:disabled):hover{border-color:var(--accent)}
-.primary:not(:disabled):hover{background:#f0bedf}
+.primary:not(:disabled):hover{background:#ff80ae}
 button:disabled{opacity:.54;cursor:default}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 #status{font-size:12px;color:var(--muted);margin-top:10px;overflow-wrap:anywhere}
 [hidden]{display:none!important}
 @media(max-width:720px){
-  body::before{opacity:.19}
+  body.has-photo::before{opacity:.08}
   header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 10px;min-height:0}
   #replace{grid-column:2;grid-row:1}
   #source{grid-column:1/-1}
   .studio{grid-template-columns:1fr;gap:20px}
   #surface{min-height:280px;padding:12px}
-  body:not(.has-photo)::before{background-position:center,57% center}
   body:not(.has-photo) header{display:flex}
-  body:not(.has-photo) #surface{align-items:end}
-  #drop{min-height:0;gap:17px}
+  .wordmark{font-size:18px;gap:5px}
+  .wordmark svg{width:25px;height:25px}
 }
 @media(max-width:420px){.speed{order:1;width:100%;margin:3px 0 0}.speed input{width:min(165px,42vw)}ol{font-size:11px}}
