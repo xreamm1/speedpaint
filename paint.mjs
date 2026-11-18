@@ -29,8 +29,9 @@ export function plan(source, brush, detail) {
     const angle = new Float32Array(size);
     const strength = new Float32Array(size);
     for (let i=0; i<size; i++) gray[i] = .299*rgb[4*i]+.587*rgb[4*i+1]+.114*rgb[4*i+2];
-    for (let y=1; y<h-1; y++) {
-      for (let x=1; x<w-1; x++) {
+    const margin = Math.min(4,Math.max(1,Math.floor(Math.min(w,h)/8)));
+    for (let y=margin; y<h-margin; y++) {
+      for (let x=margin; x<w-margin; x++) {
         const i = y*w+x;
         const dx = gray[i-w+1]+2*gray[i+1]+gray[i+w+1]-gray[i-w-1]-2*gray[i-1]-gray[i+w-1];
         const dy = gray[i+w-1]+2*gray[i+w]+gray[i+w+1]-gray[i-w-1]-2*gray[i-w]-gray[i-w+1];
@@ -134,7 +135,55 @@ export function plan(source, brush, detail) {
       gestures.push({...mark,lift:hand?distance(hand,first):0});
       hand = last;
     }
-    return gestures;
+    const construction = marks.slice(0,17).map(mark=>({...mark,
+      points:mark.points.filter((_,i)=>i%4===0).map(([x,y],i)=>[
+        x+Math.sin(i*.25)*unit*1.5,y+Math.cos(i*.29)*unit*1.5]),
+      opacity:.13,width:mark.width*.85,pace:.55
+    })).filter(mark=>mark.points.length>1);
+    return [...construction,...gestures];
+  }
+
+  function flats() {
+    const step = Math.max(1,Math.ceil(Math.max(w,h)/260));
+    const cols = Math.ceil(w/step), rows = Math.ceil(h/step);
+    const rgb = pixels(Math.max(.4,step*.42));
+    const seen = new Uint8Array(cols*rows);
+    const colorAt = i=>at((i%cols+.5)*step,(Math.floor(i/cols)+.5)*step)*4;
+    const fills = [];
+    for (let seed=0;seed<seen.length;seed++) {
+      if (seen[seed]) continue;
+      const region = [seed];
+      const c = colorAt(seed);
+      seen[seed] = 1;
+      let r=0,g=0,b=0;
+      for (let i=0;i<region.length;i++) {
+        const cell=region[i], x=cell%cols, y=Math.floor(cell/cols);
+        const v=colorAt(cell);
+        r+=rgb[v];g+=rgb[v+1];b+=rgb[v+2];
+        for (const next of [x>0?cell-1:-1,x<cols-1?cell+1:-1,y>0?cell-cols:-1,y<rows-1?cell+cols:-1]) {
+          if (next<0 || seen[next]) continue;
+          const n=colorAt(next);
+          const delta=Math.abs(rgb[n]-rgb[c])+Math.abs(rgb[n+1]-rgb[c+1])+Math.abs(rgb[n+2]-rgb[c+2]);
+          if (delta>46) continue;
+          seen[next]=1;
+          region.push(next);
+        }
+      }
+      if (region.length<Math.max(9,seen.length*.00022)) continue;
+      region.sort((a,b)=>a-b);
+      const fill = new Path2D();
+      for (let i=0;i<region.length;) {
+        const first=region[i++], row=Math.floor(first/cols);
+        let last=first;
+        while (region[i]===last+1 && Math.floor(region[i]/cols)===row) last=region[i++];
+        fill.rect(first%cols*step,row*step,(last-first+1)*step,step);
+      }
+      const center=region[Math.floor(region.length/2)];
+      const point=[(center%cols+.5)*step,(Math.floor(center/cols)+.5)*step];
+      const color='rgb('+[r,g,b].map(n=>Math.round(n/region.length)).join(',')+')';
+      fills.push({fill,points:[point],color,opacity:.88,area:region.length,pace:1+Math.min(2,region.length/400)});
+    }
+    return fills.sort((a,b)=>b.area-a.area).slice(0,105);
   }
 
   function paint(size, blur, opacity, fine) {
@@ -184,14 +233,22 @@ export function plan(source, brush, detail) {
 
   const outline = sketch(gradient(pixels(Math.max(.65,unit))));
   const scale = brush/100*unit;
-  const base = paint(Math.max(4,46*scale),Math.max(1,7*scale),.99,false);
-  const middle = paint(Math.max(3,22*scale),Math.max(.7,3.5*scale),.88,false);
-  const fine = paint(Math.max(2.6,(13-detail*.088)*scale),Math.max(.35,1.45*scale),.82,true);
+  const base = flats();
+  const middle = paint(Math.max(2.8,15*scale),Math.max(.45,1.35*scale),.72,true);
+  const fine = paint(Math.max(1.8,(9-detail*.059)*scale),Math.max(.3,.60*scale),.85,true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
   return [outline,base,[...middle,...fine,...accents]];
 }
 
 export function stroke(ctx, mark, fraction = 1) {
+  if (mark.fill) {
+    if (fraction<1) return;
+    ctx.globalAlpha = mark.opacity;
+    ctx.fillStyle=mark.color;
+    ctx.fill(mark.fill);
+    ctx.globalAlpha=1;
+    return;
+  }
   const {points,width,color,opacity} = mark;
   const distance = (points.length-1)*fraction;
   ctx.globalAlpha = opacity;

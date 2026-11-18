@@ -1,4 +1,5 @@
 import {paper,plan,stroke} from './paint.mjs';
+import {finishPlan} from './finish.mjs';
 
 const $ = id => document.getElementById(id);
 const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,pause,reset,status} =
@@ -10,9 +11,9 @@ const ctx = canvas.getContext('2d');
 const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
-const finishAt = .96;
-const limits = [0, .34, .62, finishAt];
-const duration = 24000;
+const finishAt = .67;
+const limits = [0, .27, .49, finishAt];
+const duration = 30000;
 const formats = ['video/webm;codecs=vp8','video/webm','video/mp4'];
 const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
   formats.find(type=>MediaRecorder.isTypeSupported(type));
@@ -20,6 +21,7 @@ let ready = false, loading = false, running = false, exporting = false;
 let time = 0, frame = 0, previous = 0, generation = 0;
 let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
 let original, originalPng;
+let finish, hand;
 
 function controls() {
   const busy = loading || exporting;
@@ -35,11 +37,24 @@ function controls() {
 }
 function wipe() {
   time = phase = index = 0;
+  finish = hand = null;
   progress.value = 0;
   for (const item of phases) item.classList.remove('active');
   ink.fillStyle = paper;
   ink.fillRect(0,0,painted.width,painted.height);
   ctx.drawImage(painted,0,0,canvas.width,canvas.height);
+}
+function nib(point) {
+  if (!point) return;
+  ctx.beginPath();
+  ctx.arc(...point,Math.max(2,Math.min(8,Math.max(canvas.width,canvas.height)/240)),0,Math.PI*2);
+  ctx.lineWidth=1.5;
+  ctx.strokeStyle='#f9f3ed';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(...point,1.35,0,Math.PI*2);
+  ctx.fillStyle='#383039';
+  ctx.fill();
 }
 async function load(image) {
   if (!image || exporting) return;
@@ -120,6 +135,11 @@ function prepare() {
   wipe();
 }
 function render(fraction) {
+  if (finish) {
+    nib(finish(Math.min(1,(fraction-finishAt)/(1-finishAt))));
+    progress.value=fraction;
+    return;
+  }
   while (phase<2 && fraction>=limits[phase+1]) {
     const {marks} = sequence[phase];
     while (index<marks.length) stroke(ink,marks[index++]);
@@ -129,32 +149,36 @@ function render(fraction) {
   const {marks,timing,end} = sequence[phase];
   const value = end*(Math.min(fraction,finishAt)-limits[phase])/(limits[phase+1]-limits[phase]);
   while (index<marks.length && (timing[index].end<=value || fraction>=finishAt)) stroke(ink,marks[index++]);
-  if (fraction===1) {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.drawImage(original,0,0);
-  } else {
-    ctx.drawImage(painted,0,0,canvas.width,canvas.height);
+  ctx.drawImage(painted,0,0,canvas.width,canvas.height);
+  if (fraction>=finishAt) {
+    finish=finishPlan(ctx,original,hand);
+    nib(finish(Math.min(1,(fraction-finishAt)/(1-finishAt))));
+    progress.value=fraction;
+    return;
   }
   if (index<marks.length) {
     const {begin,end: stop} = timing[index];
     const t = Math.max(0,(value-begin)/(stop-begin));
-    const eased = t*t*(3-2*t);
+    const eased = t*t*t*(10+t*(-15+6*t));
+    const scaleX=canvas.width/painted.width, scaleY=canvas.height/painted.height;
+    const points=marks[index].points;
+    const position=eased*(points.length-1);
+    const a=points[Math.floor(position)], b=points[Math.ceil(position)];
+    const u=position-Math.floor(position);
+    const tip=[(a[0]+(b[0]-a[0])*u)*scaleX,(a[1]+(b[1]-a[1])*u)*scaleY];
     if (eased>0) {
       ctx.save();
-      ctx.scale(canvas.width/painted.width,canvas.height/painted.height);
+      ctx.scale(scaleX,scaleY);
       stroke(ctx,marks[index],eased);
       ctx.restore();
+    } else if (index>0 && begin>timing[index-1].end) {
+      const last=marks[index-1].points.at(-1);
+      const lift=(value-timing[index-1].end)/(begin-timing[index-1].end);
+      tip[0]=last[0]*scaleX+(tip[0]-last[0]*scaleX)*lift;
+      tip[1]=last[1]*scaleY+(tip[1]-last[1]*scaleY)*lift;
     }
-  }
-  if (fraction>finishAt && fraction<1) {
-    const mix = (fraction-finishAt)/(1-finishAt);
-    ctx.save();
-    ctx.globalAlpha = mix;
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.drawImage(original,0,0);
-    ctx.restore();
+    hand=tip;
+    nib(tip);
   }
   phases.forEach((item,i)=>item.classList.toggle('active',i===phase));
   progress.value = fraction;
