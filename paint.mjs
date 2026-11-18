@@ -75,7 +75,7 @@ function smoothMask(region,cols,step) {
   return path;
 }
 
-export function plan(source, brush, detail) {
+export function plan(source, brush, detail, focus) {
   const {width: w, height: h} = source;
   const sample = document.createElement('canvas');
   sample.width = w;
@@ -172,19 +172,34 @@ export function plan(source, brush, detail) {
         color:'#514740', opacity:.34+random()*.38, pressure:random(), pace:.7+random()*.65});
     }
     marks.sort((a,b)=>b.length-a.length);
-    const candidates = marks.slice(0,24+Math.round(detail*.53));
     const gestures = [];
     const distance = (a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+    const budget=24+Math.round(detail*.53);
+    const major=focus ? [...marks].map(mark=>{
+      const point=[focus[0]*w,focus[1]*h];
+      const center=mark.points[Math.floor(mark.points.length/2)];
+      return {...mark,focusDistance:distance(center,point)};
+    }).sort((a,b)=>(a.focusDistance-b.focusDistance)*1.4-(a.length-b.length)*.42) : marks;
+    const foreground=major.slice(0,Math.round(budget*.72));
+    const selectedPoints=new Set(foreground.map(mark=>mark.points));
+    const candidates=focus ? [...foreground,...marks.filter(mark=>!selectedPoints.has(mark.points)).slice(0,budget-foreground.length)] :
+      marks.slice(0,budget);
+    const construction=major.slice(0,focus?11:17).map(mark=>({...mark,
+      points:mark.points.filter((_,i)=>i%4===0).map(([x,y],i)=>[
+        x+Math.sin(i*.25)*unit*1.5,y+Math.cos(i*.29)*unit*1.5]),
+      opacity:.13,width:mark.width*.85,pace:.55
+    })).filter(mark=>mark.points.length>1);
     let hand;
     while (candidates.length) {
       let best = Infinity;
       let selected = 0;
       let reverse = false;
       for (let i=0; hand && i<candidates.length; i++) {
-        const {points,length} = candidates[i];
+        const {points,length,focusDistance} = candidates[i];
         const first = distance(hand,points[0]);
         const last = distance(hand,points.at(-1));
-        const score = Math.min(first,last)-length*.48;
+        const priority=focus && gestures.length<budget*.55 ? (focusDistance ?? Math.hypot(w,h))*.72 : 0;
+        const score = Math.min(first,last)-length*.48+priority;
         if (score<best) {
           best = score;
           selected = i;
@@ -210,11 +225,6 @@ export function plan(source, brush, detail) {
       gestures.push({...mark,lift:hand?distance(hand,first):0});
       hand = last;
     }
-    const construction = marks.slice(0,17).map(mark=>({...mark,
-      points:mark.points.filter((_,i)=>i%4===0).map(([x,y],i)=>[
-        x+Math.sin(i*.25)*unit*1.5,y+Math.cos(i*.29)*unit*1.5]),
-      opacity:.13,width:mark.width*.85,pace:.55
-    })).filter(mark=>mark.points.length>1);
     return [...construction,...gestures];
   }
 

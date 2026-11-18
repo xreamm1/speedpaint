@@ -1,5 +1,5 @@
-import {paper,plan,stroke,measure,position} from './paint.mjs?v=native-details';
-import {finishPlan} from './finish.mjs?v=native-details';
+import {paper,plan,stroke,measure,position} from './paint.mjs?v=focus';
+import {finishPlan} from './finish.mjs?v=accents';
 import {restorePlan} from './restore.mjs';
 
 const $ = id => document.getElementById(id);
@@ -9,11 +9,11 @@ const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,
 const download = $('export');
 const savePng = $('save-png');
 const demo = $('demo');
-const demoVideo = $('demo-video');
 const demoVideos = [...demo.querySelectorAll('video')];
-const demoToggle = $('demo-toggle');
 const demoFold = $('demo-fold');
-const uploadLink = $('upload-link');
+const chooseUpload = $('choose-upload');
+const upload = $('upload');
+const exact = $('exact');
 const editor = $('editor');
 const uploadStatus = $('upload-status');
 const phases = [...document.querySelectorAll('ol li')];
@@ -22,7 +22,7 @@ const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
 const restoreAt = .70;
-const limits = [0, .12, .28, .61, restoreAt];
+let limits = [0, .12, .28, .70, 1];
 const duration = 64000;
 phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
 const formats = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
@@ -31,7 +31,7 @@ const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
 let ready = false, loading = false, running = false, exporting = false;
 let time = 0, frame = 0, previous = 0, generation = 0;
 let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
-let original, restoration;
+let original, restoration, focus;
 
 function controls() {
   const busy = loading || exporting;
@@ -41,7 +41,9 @@ function controls() {
   download.disabled = !ready || busy || !mime || !complete;
   savePng.disabled = !ready || busy || !complete;
   downloads.hidden = !complete && !exporting;
-  file.disabled = replace.disabled = choose.disabled = busy;
+  file.disabled = replace.disabled = choose.disabled = chooseUpload.disabled = busy;
+  exact.disabled = busy || running || (time>0 && !complete);
+  canvas.classList.toggle('can-pick',ready && !busy && !running && time===0);
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
   start.textContent = running && !exporting ? 'Пауза' : complete ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
@@ -63,6 +65,17 @@ function wipe() {
   ink.fillStyle = paper;
   ink.fillRect(0,0,reference.width,reference.height);
   ctx.drawImage(painted,0,0);
+}
+function showFocus() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(original,0,0);
+  if (!focus) return;
+  const radius=Math.max(8,Math.max(canvas.width,canvas.height)*.015);
+  ctx.beginPath();
+  ctx.arc(focus[0]*canvas.width,focus[1]*canvas.height,radius,0,Math.PI*2);
+  ctx.lineWidth=Math.max(2,radius*.16);
+  ctx.strokeStyle='#f05b93';
+  ctx.stroke();
 }
 function nib(point,opacity=1) {
   if (!point) return;
@@ -108,11 +121,15 @@ async function load(image) {
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
     editor.hidden = false;
-    uploadLink.hidden = true;
+    choose.hidden = upload.hidden = true;
     document.body.classList.add('has-photo');
+    document.querySelector('main').append(demo);
+    for (const video of demoVideos) video.pause();
     dimensions.textContent = canvas.width+' × '+canvas.height+' px';
     ready = true;
+    focus = null;
     wipe();
+    showFocus();
     status.textContent = 'Фото готово. Нажмите «Старт».';
     uploadStatus.textContent = 'Фото загружено. Редактор ниже.';
     editor.scrollIntoView({block:'start'});
@@ -129,21 +146,45 @@ async function load(image) {
 }
 file.addEventListener('change',()=>load(file.files[0]));
 choose.addEventListener('click',()=>file.click());
+chooseUpload.addEventListener('click',()=>file.click());
 replace.addEventListener('click',()=>file.click());
-function syncDemoButton() {
-  demoToggle.textContent=demoVideo.paused?'▶':'Ⅱ';
-  demoToggle.setAttribute('aria-label',demoVideo.paused?'Воспроизвести пример':'Приостановить пример');
+canvas.addEventListener('click',event=>{
+  if (!canvas.classList.contains('can-pick')) return;
+  const box=canvas.getBoundingClientRect();
+  const scale=Math.min(box.width/canvas.width,box.height/canvas.height);
+  const x=(event.clientX-box.left-(box.width-canvas.width*scale)/2)/(canvas.width*scale);
+  const y=(event.clientY-box.top-(box.height-canvas.height*scale)/2)/(canvas.height*scale);
+  if(x<0 || x>1 || y<0 || y>1) return;
+  focus=[x,y];
+  showFocus();
+  status.textContent='Точка старта выбрана. Нажмите «Старт».';
+});
+exact.addEventListener('change',()=>{if(time) reset.click();});
+for (const video of demoVideos) {
+  const card=video.closest('figure');
+  const button=card.querySelector('button');
+  const caption=card.querySelector('figcaption').textContent;
+  function sync() {
+    button.textContent=video.paused?'▶':'Ⅱ';
+    button.setAttribute('aria-label',(video.paused?'Воспроизвести: ':'Приостановить: ')+caption);
+  }
+  video.addEventListener('play',sync);
+  video.addEventListener('pause',sync);
+  video.addEventListener('ended',sync);
+  button.addEventListener('click',()=>{
+    if (!video.paused) video.pause();
+    else {
+      for (const other of demoVideos) if(other!==video) other.pause();
+      video.play().catch(sync);
+    }
+  });
 }
-demoVideo.addEventListener('play',syncDemoButton);
-demoVideo.addEventListener('pause',syncDemoButton);
-let demoVisible=false;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
-let demoWantsPlayback=!reduceMotion.matches && !navigator.connection?.saveData;
 let scrollFrame=0;
 // Match the pinned showcase transition used on EdiTool.
 function paintShowcase() {
   scrollFrame=0;
-  if (demo.hidden || demoVideo.hidden) return;
+  if (demo.hidden || demo.classList.contains('is-collapsed')) return;
   const {top,height}=demo.getBoundingClientRect();
   const progress=reduceMotion.matches || !height ? 0 : Math.min(1,Math.max(0,-top/height));
   const fade=Math.min(1,progress/.8);
@@ -159,28 +200,15 @@ function scheduleShowcase() {
 addEventListener('scroll',scheduleShowcase,{passive:true});
 addEventListener('resize',scheduleShowcase,{passive:true});
 reduceMotion.addEventListener('change',scheduleShowcase);
-function updateDemoPlayback() {
-  if (demoWantsPlayback && demoVisible && !demoVideo.hidden && !demo.hidden) {
-    for(const video of demoVideos) video.play().catch(syncDemoButton);
-  } else {
-    for(const video of demoVideos) video.pause();
-  }
-}
-demoToggle.addEventListener('click',()=>{
-  demoWantsPlayback=demoVideo.paused;
-  updateDemoPlayback();
-});
 demoFold.addEventListener('click',()=>{
   const collapsed=demo.classList.toggle('is-collapsed');
-  demoVideo.hidden=demoToggle.hidden=collapsed;
   demoFold.setAttribute('aria-expanded',String(!collapsed));
   demoFold.textContent=collapsed?'Развернуть видео':'Свернуть видео';
-  updateDemoPlayback();
+  if(collapsed) for(const video of demoVideos) video.pause();
   scheduleShowcase();
 });
 new IntersectionObserver(([entry])=>{
-  demoVisible=entry.isIntersecting;
-  updateDemoPlayback();
+  if(!entry.isIntersecting) for(const video of demoVideos) video.pause();
 }).observe(demo);
 scheduleShowcase();
 for(const zone of [surface,drop]) {
@@ -217,7 +245,8 @@ function schedule(marks,stage,tail) {
 }
 function prepare() {
   sequence=[];
-  for (const [stage,marks] of plan(reference,+brush.value,+detail.value).entries()) {
+  limits=exact.checked ? [0,.12,.28,.61,restoreAt] : [0,.12,.28,.70,1];
+  for (const [stage,marks] of plan(reference,+brush.value,+detail.value,focus).entries()) {
     sequence.push(schedule(marks,stage,sequence.at(-1)?.tail));
   }
   wipe();
@@ -236,10 +265,11 @@ function render(fraction) {
     if (phase===3) sequence.push(schedule(finishPlan(ink,reference,+detail.value),phase,sequence[2].tail));
   }
   const {marks,timing,end} = sequence[phase];
-  const value = end*(Math.min(fraction,restoreAt)-limits[phase])/(limits[phase+1]-limits[phase]);
-  while (index<marks.length && (timing[index].end<=value || fraction>=restoreAt)) stroke(ink,marks[index++]);
+  const stopAt=limits[phase+1];
+  const value = end*(Math.min(fraction,stopAt)-limits[phase])/(stopAt-limits[phase]);
+  while (index<marks.length && (timing[index].end<=value || fraction>=stopAt)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0);
-  if (fraction>=restoreAt) {
+  if (exact.checked && fraction>=restoreAt) {
     const [x,y]=sequence[phase].tail || [reference.width*.5,reference.height*.5];
     restoration=restorePlan(ctx,original,[x*canvas.width/reference.width,y*canvas.height/reference.height]);
     nib(restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt))));
@@ -310,7 +340,8 @@ reset.addEventListener('click',()=>{
   cancelAnimationFrame(frame);
   running = false;
   wipe();
-  status.textContent = 'Холст очищен.';
+  showFocus();
+  status.textContent = 'Можно выбрать точку старта или начать рисунок.';
   controls();
 });
 function save(blob, name) {
