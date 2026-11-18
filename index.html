@@ -6,57 +6,50 @@
 <meta name="theme-color" content="#030203">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=dark">
-<script type="module" src="./app.mjs"></script>
+<link rel="stylesheet" href="./style.css?v=studio">
+<script type="module" src="./app.mjs?v=studio"></script>
 </head>
 <body>
 <main>
 <header>
 <h1>Speedpaint</h1>
 <div id="source" hidden><span id="filename"></span><span id="dimensions"></span></div>
-<div class="upload">
-<input type="file" id="file" accept="image/jpeg,image/png,image/webp" aria-label="Выбрать фото">
-<label for="file" class="file-button">Выбрать фото</label>
-</div>
+<button id="replace" hidden>Заменить фото</button>
+<input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
 </header>
 <div class="studio">
 <section class="workspace" aria-label="Холст">
 <div id="surface">
-<label id="drop" for="file">
-<span class="drop-art" aria-hidden="true">
-<span class="picture">
-<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<rect x="4" y="5" width="24" height="22" rx="4"/>
-<circle cx="12" cy="12" r="2"/>
-<path d="m5 23 7-6 4 3 5-6 6 6"/>
-</svg>
-</span>
-</span>
-<strong>Перетащите фото сюда</strong>
-<small>JPG, PNG, WEBP</small>
-</label>
+<div id="drop">
+<button id="choose" class="primary">Выбрать фото</button>
+<small>Или перетащите JPG, PNG или WEBP</small>
+</div>
 <canvas id="canvas" hidden aria-label="Текущий рисунок"></canvas>
 </div>
+<div id="playback" hidden>
 <div class="timeline">
 <progress id="progress" value="0" max="1" aria-label="Прогресс рисования"></progress>
-<ol><li>Набросок</li><li>Подмалёвок</li><li>Детализация</li></ol>
+<ol aria-label="Этапы рисования"><li>Набросок</li><li>Подмалёвок</li><li>Детализация</li></ol>
 </div>
+<div class="controls">
+<button id="start" class="primary" disabled>Старт</button>
+<button id="reset" disabled>Сбросить</button>
+<label class="speed" for="speed">Скорость <input id="speed" type="range" min=".25" max="4" step=".25" value="1"><output for="speed">1×</output></label>
+<span id="clock">0:00 / 0:30</span>
+</div>
+<div id="downloads" hidden>
+<button id="export" class="primary" disabled>Скачать видео</button>
+<button id="save-png" disabled>Сохранить PNG</button>
+</div>
+</div>
+<p id="status" role="status">Фото обрабатывается на устройстве.</p>
 </section>
-<aside aria-label="Настройки и управление">
+<aside aria-label="Настройки кисти">
 <h2>Настройки</h2>
-<label class="setting" for="speed">Скорость <output for="speed">1×</output></label>
-<input id="speed" type="range" min=".25" max="4" step=".25" value="1">
 <label class="setting" for="brush">Размер кисти <output for="brush">100%</output></label>
 <input id="brush" type="range" min="60" max="160" step="5" value="100">
 <label class="setting" for="detail">Детализация <output for="detail">65%</output></label>
 <input id="detail" type="range" min="0" max="100" step="5" value="65">
-<div class="controls">
-<button id="start" class="primary" disabled>Старт</button>
-<div class="pair"><button id="pause" disabled>Пауза</button><button id="reset" disabled>Сбросить</button></div>
-<button id="export" disabled>Экспорт видео</button>
-<button id="save-png" disabled>Сохранить PNG</button>
-</div>
-<p id="status" role="status">Фото обрабатывается на устройстве.</p>
 </aside>
 </div>
 </main>

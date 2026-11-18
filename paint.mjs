@@ -155,11 +155,14 @@ export function plan(source, brush, detail) {
       const region = [seed];
       const c = colorAt(seed);
       seen[seed] = 1;
-      let r=0,g=0,b=0;
+      let r=0,g=0,b=0, sumX=0,sumY=0,minX=cols,maxX=0,minY=rows,maxY=0;
       for (let i=0;i<region.length;i++) {
         const cell=region[i], x=cell%cols, y=Math.floor(cell/cols);
         const v=colorAt(cell);
         r+=rgb[v];g+=rgb[v+1];b+=rgb[v+2];
+        sumX+=x;sumY+=y;
+        minX=Math.min(minX,x);maxX=Math.max(maxX,x);
+        minY=Math.min(minY,y);maxY=Math.max(maxY,y);
         for (const next of [x>0?cell-1:-1,x<cols-1?cell+1:-1,y>0?cell-cols:-1,y<rows-1?cell+cols:-1]) {
           if (next<0 || seen[next]) continue;
           const n=colorAt(next);
@@ -178,25 +181,51 @@ export function plan(source, brush, detail) {
         while (region[i]===last+1 && Math.floor(region[i]/cols)===row) last=region[i++];
         fill.rect(first%cols*step,row*step,(last-first+1)*step,step);
       }
-      const center=region[Math.floor(region.length/2)];
-      const point=[(center%cols+.5)*step,(Math.floor(center/cols)+.5)*step];
-      const color='rgb('+[r,g,b].map(n=>Math.round(n/region.length)).join(',')+')';
-      fills.push({fill,region,point,color});
+      const point=[(sumX/region.length+.5)*step,(sumY/region.length+.5)*step];
+      const pigment=[r,g,b].map(n=>Math.round(n/region.length));
+      const background=Number(minX===0)+Number(minY===0)+Number(maxX===cols-1)+Number(maxY===rows-1)>1;
+      const roundness=Math.min(maxX-minX+1,maxY-minY+1)/Math.max(maxX-minX+1,maxY-minY+1);
+      fills.push({fill,region,point,pigment,background,roundness});
     }
-    return fills.sort((a,b)=>b.region.length-a.region.length).slice(0,105).flatMap(({fill,region,point,color})=>{
+    const regions=fills.sort((a,b)=>b.region.length-a.region.length).slice(0,105);
+    const anchors=[];
+    const reach=Math.max(w,h)*.135;
+    for (const area of regions) {
+      if (anchors.length>=12) break;
+      if (anchors.every(({point})=>Math.hypot(point[0]-area.point[0],point[1]-area.point[1])>reach)) anchors.push(area);
+    }
+    function shapeAt(x,y,pigment) {
+      let shape=0,best=Infinity;
+      for(let i=0;i<anchors.length;i++) {
+        const {point,pigment:base}=anchors[i];
+        const chroma=Math.hypot((pigment[0]-pigment[1])-(base[0]-base[1]),(pigment[1]-pigment[2])-(base[1]-base[2]));
+        const score=Math.hypot(x-point[0],y-point[1])+Math.min(reach*.62,chroma*reach/200);
+        if (score<best) {best=score;shape=i;}
+      }
+      return shape;
+    }
+    const marks=regions.flatMap(({fill,region,point,pigment,background,roundness})=>{
+      const color='rgb('+pigment.join(',')+')';
+      const shape=shapeAt(...point,pigment);
       const width=Math.max(step*2.2,Math.min(52*unit,Math.sqrt(region.length)*step*.38))*brush/100;
       const lane=Math.max(step,width*.88);
       const angle=.18+(random()-.5)*.48;
       const dx=Math.cos(angle), dy=Math.sin(angle);
+      const center=point[0]*dx+point[1]*dy;
+      const span=Math.max(lane*2,Math.sqrt(region.length)*step);
+      const bow=background ? width*.12 : span*.15*roundness;
+      const offset=x=>bow*((x-center)/span)**2;
       const bands=new Map();
       for (const cell of region) {
         const x=(cell%cols+.5)*step, y=(Math.floor(cell/cols)+.5)*step;
-        const band=Math.round((y*dx-x*dy)/lane);
+        const along=x*dx+y*dy;
+        const across=y*dx-x*dy-offset(along);
+        const band=Math.round(across/lane);
         if (!bands.has(band)) bands.set(band,[]);
-        bands.get(band).push({along:x*dx+y*dy,x,y});
+        bands.get(band).push({along,across,x,y});
       }
       const result=[];
-      let reverse=false, last=point;
+      let reverse=false;
       for (const [,cells] of [...bands].sort(([a],[b])=>a-b)) {
         cells.sort((a,b)=>reverse?b.along-a.along:a.along-b.along);
         for (let i=0;i<cells.length;) {
@@ -205,18 +234,22 @@ export function plan(source, brush, detail) {
           const a=cells[start], b=cells[i-1];
           const length=Math.abs(a.along-b.along);
           if (i-start<3 && region.length>20) continue;
-          const points=[[a.x,a.y]];
           const bend=(random()-.5)*Math.min(width*.65,length*.24);
-          if (length>step) points.push([(a.x+b.x)/2-dy*bend,(a.y+b.y)/2+dx*bend]);
-          points.push(length>step?[b.x,b.y]:[a.x+dx*step*.55,a.y+dy*step*.55]);
+          const points=length<=step?[[a.x,a.y],[a.x+dx*step*.55,a.y+dy*step*.55]]:
+            Array.from({length:7},(_,j)=>{
+              const t=j/6, along=a.along+(b.along-a.along)*t;
+              const across=a.across+(b.across-a.across)*t+offset(along)+Math.sin(Math.PI*t)*bend;
+              return [along*dx-across*dy,along*dy+across*dx];
+            });
           result.push({clip:fill,points,width:width*(.93+random()*.14),color,
-            opacity:.68+random()*.16,pace:.8+random()*.38,lift:Math.hypot(a.x-last[0],a.y-last[1])});
-          last=points.at(-1);
+            opacity:.68+random()*.16,pace:.8+random()*.38,pressure:.35,
+            shape,mass:region.length>=seen.length*.013});
         }
         reverse=!reverse;
       }
       return result;
     });
+    return {marks,shapeAt};
   }
 
   function paint(size, blur, opacity, fine) {
@@ -258,6 +291,7 @@ export function plan(source, brush, detail) {
         const color = 'rgb('+rgb.slice(rgbIndex,rgbIndex+3).join(',')+')';
         const group = Math.floor(px/(spacing*5)) + Math.floor(py/(spacing*5))*Math.ceil(w/(spacing*5));
         marks.push({points,width,color,opacity:opacity*(.82+random()*.18),
+          center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],
           score:Math.sin(group*192.27)*.44 + random()*.47 + (fine?strength[i]/1500:0)});
       }
     }
@@ -266,11 +300,26 @@ export function plan(source, brush, detail) {
 
   const outline = sketch(gradient(pixels(Math.max(.65,unit))));
   const scale = brush/100*unit;
-  const base = flats();
+  const {marks:base,shapeAt} = flats();
   const middle = paint(Math.max(2.8,15*scale),Math.max(.45,1.35*scale),.72,true);
   const fine = paint(Math.max(1.8,(9-detail*.059)*scale),Math.max(.3,.60*scale),.85,true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
-  return [outline,base,[...middle,...fine,...accents]];
+  const byShape=(a,b)=>a.shape-b.shape;
+  const foundation=base.filter(mark=>mark.mass);
+  const colorStudies=base.filter(mark=>!mark.mass).sort(byShape);
+  const tones=[], edges=[];
+  for (const [pass,marks] of [middle,fine].entries()) {
+    for (const mark of marks) {
+      mark.shape=shapeAt(...mark.center,mark.pigment);
+      const value=.30*mark.pigment[0]+.59*mark.pigment[1]+.11*mark.pigment[2];
+      mark.tone=Math.min(3,Math.floor(value/64));
+      mark.pass=pass;
+      (pass && (mark.edge>80 || value>222)?edges:tones).push(mark);
+    }
+  }
+  const local=(a,b)=>byShape(a,b)||a.tone-b.tone||a.pass-b.pass||
+    Math.floor(a.center[1]/(18*unit))-Math.floor(b.center[1]/(18*unit))||a.center[0]-b.center[0];
+  return [outline,[...foundation,...colorStudies],[...tones.sort(local),...edges.sort(local),...accents]];
 }
 
 export function measure(mark) {
@@ -306,7 +355,15 @@ export function stroke(ctx, mark, fraction = 1) {
   const distance = position(mark,fraction);
   ctx.globalAlpha = opacity;
   ctx.lineWidth = width;
-  ctx.fillStyle = ctx.strokeStyle = color;
+  let pigment=color;
+  if (mark.clip) {
+    pigment=ctx.createLinearGradient(...points[0],...points.at(-1));
+    pigment.addColorStop(0,color.replace('rgb(','rgba(').replace(')',',.36)'));
+    pigment.addColorStop(.21,color);
+    pigment.addColorStop(.75,color);
+    pigment.addColorStop(1,color.replace('rgb(','rgba(').replace(')',',.42)'));
+  }
+  ctx.fillStyle = ctx.strokeStyle = pigment;
   ctx.lineCap = ctx.lineJoin = 'round';
   ctx.beginPath();
   if (mark.pressure!==undefined && points.length>1) {
@@ -320,7 +377,8 @@ export function stroke(ctx, mark, fraction = 1) {
       const before = points[Math.max(0,i-2)], after = points[Math.min(points.length-1,i+1)];
       const heading = Math.atan2(after[1]-before[1],after[0]-before[0])+Math.PI/2;
       const u = Math.min(i,distance)/(points.length-1);
-      const radius = width*.5*(.20+.80*Math.pow(Math.sin(Math.PI*u),.52))*
+      const contact=mark.clip?.55:.20;
+      const radius = width*.5*(contact+(1-contact)*Math.pow(Math.sin(Math.PI*u),.52))*
         (.83+.17*Math.sin(i*.49+mark.pressure*6));
       const dx = Math.cos(heading)*radius, dy = Math.sin(heading)*radius;
       left.push([x+dx,y+dy]);

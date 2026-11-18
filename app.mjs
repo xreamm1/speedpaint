@@ -2,8 +2,9 @@ import {paper,plan,stroke,measure,position} from './paint.mjs';
 import {finishPlan} from './finish.mjs';
 
 const $ = id => document.getElementById(id);
-const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,pause,reset,status} =
-  Object.fromEntries('canvas file surface drop source filename dimensions progress speed brush detail start pause reset status'.split(' ').map(id=>[id,$(id)]));
+const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,reset,status,
+  replace,choose,playback,downloads,clock} =
+  Object.fromEntries('canvas file surface drop source filename dimensions progress speed brush detail start reset status replace choose playback downloads clock'.split(' ').map(id=>[id,$(id)]));
 const download = $('export');
 const savePng = $('save-png');
 const phases = [...document.querySelectorAll('ol li')];
@@ -13,6 +14,7 @@ const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
 const limits = [0, .27, .60, .85, 1];
 const duration = 30000;
+phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
 const formats = ['video/webm;codecs=vp8','video/webm','video/mp4'];
 const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
   formats.find(type=>MediaRecorder.isTypeSupported(type));
@@ -22,26 +24,34 @@ let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
 
 function controls() {
   const busy = loading || exporting;
-  start.disabled = !ready || busy || running;
-  pause.disabled = !running || exporting;
+  const complete = time>=duration;
+  start.disabled = !ready || busy;
   reset.disabled = !ready || busy;
-  download.disabled = !ready || busy || !mime;
-  savePng.disabled = !ready || busy || time<duration;
-  file.disabled = busy;
+  download.disabled = !ready || busy || !mime || !complete;
+  savePng.disabled = !ready || busy || !complete;
+  downloads.hidden = !complete && !exporting;
+  file.disabled = replace.disabled = choose.disabled = busy;
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
-  start.textContent = time>=duration ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
+  start.textContent = running && !exporting ? 'Пауза' : complete ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
+  start.classList.toggle('primary',!complete && !exporting);
+}
+function updateProgress(fraction) {
+  const seconds=Math.floor(time/1000);
+  progress.value=fraction;
+  clock.textContent=Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')+' / 0:30';
 }
 function wipe() {
   time = phase = index = 0;
-  progress.value = 0;
+  updateProgress(0);
   for (const item of phases) item.classList.remove('active');
   ink.fillStyle = paper;
   ink.fillRect(0,0,painted.width,painted.height);
   ctx.drawImage(painted,0,0,canvas.width,canvas.height);
 }
-function nib(point) {
+function nib(point,opacity=1) {
   if (!point) return;
+  ctx.globalAlpha=opacity;
   ctx.beginPath();
   ctx.arc(...point,Math.max(2,Math.min(8,Math.max(canvas.width,canvas.height)/240)),0,Math.PI*2);
   ctx.lineWidth=1.5;
@@ -51,6 +61,7 @@ function nib(point) {
   ctx.arc(...point,1.35,0,Math.PI*2);
   ctx.fillStyle='#383039';
   ctx.fill();
+  ctx.globalAlpha=1;
 }
 async function load(image) {
   if (!image || exporting) return;
@@ -77,7 +88,7 @@ async function load(image) {
     ref.drawImage(picture,0,0,reference.width,reference.height);
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
-    source.hidden = canvas.hidden = false;
+    source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
     drop.hidden = true;
     dimensions.textContent = canvas.width+' × '+canvas.height+' px';
     ready = true;
@@ -95,6 +106,8 @@ async function load(image) {
   }
 }
 file.addEventListener('change',()=>load(file.files[0]));
+choose.addEventListener('click',()=>file.click());
+replace.addEventListener('click',()=>file.click());
 surface.addEventListener('dragover',event=>{
   event.preventDefault();
   if (!exporting) surface.classList.add('over');
@@ -111,19 +124,25 @@ for (const slider of [speed,brush,detail]) {
     output.value = slider===speed ? slider.value.replace('.',',')+'×' : slider.value+'%';
   });
 }
-function schedule(marks,stage) {
+function schedule(marks,stage,tail) {
   let end = 0;
   const timing = marks.map(mark=>{
     const length=measure(mark);
-    const lift=Math.min(15,Math.sqrt(mark.lift || 0)*.85);
-    const begin=end+lift;
+    const from=tail;
+    const gap=from?Math.hypot(mark.points[0][0]-from[0],mark.points[0][1]-from[1]):0;
+    const depart=end;
+    const begin=end+Math.min(20,Math.sqrt(gap)*.83);
     end=begin+(5+Math.sqrt(length)*(stage===0?3:1))*(mark.pace || 1);
-    return {begin,end};
+    tail=mark.points.at(-1);
+    return {begin,end,depart,from,gap};
   });
-  return {marks,timing,end};
+  return {marks,timing,end,tail};
 }
 function prepare() {
-  sequence = plan(reference,+brush.value,+detail.value).map(schedule);
+  sequence=[];
+  for (const [stage,marks] of plan(reference,+brush.value,+detail.value).entries()) {
+    sequence.push(schedule(marks,stage,sequence.at(-1)?.tail));
+  }
   wipe();
 }
 function render(fraction) {
@@ -132,14 +151,14 @@ function render(fraction) {
     while (index<marks.length) stroke(ink,marks[index++]);
     phase++;
     index = 0;
-    if (phase===3) sequence.push(schedule(finishPlan(ink,reference,+detail.value),phase));
+    if (phase===3) sequence.push(schedule(finishPlan(ink,reference,+detail.value),phase,sequence[2].tail));
   }
   const {marks,timing,end} = sequence[phase];
   const value = end*(fraction-limits[phase])/(limits[phase+1]-limits[phase]);
   while (index<marks.length && (timing[index].end<=value || fraction===1)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0,canvas.width,canvas.height);
   if (index<marks.length) {
-    const {begin,end: stop} = timing[index];
+    const {begin,end: stop,depart,from,gap} = timing[index];
     const t = Math.max(0,(value-begin)/(stop-begin));
     const eased = t*t*t*(10+t*(-15+6*t));
     const scaleX=canvas.width/painted.width, scaleY=canvas.height/painted.height;
@@ -148,21 +167,23 @@ function render(fraction) {
     const a=points[Math.floor(along)], b=points[Math.ceil(along)];
     const u=along-Math.floor(along);
     const tip=[(a[0]+(b[0]-a[0])*u)*scaleX,(a[1]+(b[1]-a[1])*u)*scaleY];
+    let opacity=1;
     if (eased>0) {
       ctx.save();
       ctx.scale(scaleX,scaleY);
       stroke(ctx,marks[index],eased);
       ctx.restore();
-    } else if (index>0 && begin>timing[index-1].end) {
-      const last=marks[index-1].points.at(-1);
-      const lift=(value-timing[index-1].end)/(begin-timing[index-1].end);
-      tip[0]=last[0]*scaleX+(tip[0]-last[0]*scaleX)*lift;
-      tip[1]=last[1]*scaleY+(tip[1]-last[1]*scaleY)*lift;
+    } else if (from && begin>depart) {
+      const t=(value-depart)/(begin-depart);
+      const lift=t*t*(3-2*t);
+      tip[0]=from[0]*scaleX+(tip[0]-from[0]*scaleX)*lift;
+      tip[1]=from[1]*scaleY+(tip[1]-from[1]*scaleY)*lift;
+      if (gap>Math.max(painted.width,painted.height)*.14) opacity=1-.7*Math.sin(Math.PI*t);
     }
-    nib(tip);
+    nib(tip,opacity);
   }
   phases.forEach((item,i)=>item.classList.toggle('active',i===Math.min(2,phase)));
-  progress.value = fraction;
+  updateProgress(fraction);
 }
 
 function play(rate, done) {
@@ -185,15 +206,16 @@ function play(rate, done) {
   frame = requestAnimationFrame(tick);
 }
 start.addEventListener('click',()=>{
+  if (running) {
+    cancelAnimationFrame(frame);
+    running = false;
+    status.textContent = 'Пауза.';
+    controls();
+    return;
+  }
   if (!time || time>=duration) prepare();
   status.textContent = 'Рисую…';
   play(()=>+speed.value);
-});
-pause.addEventListener('click',()=>{
-  cancelAnimationFrame(frame);
-  running = false;
-  status.textContent = 'Пауза.';
-  controls();
 });
 reset.addEventListener('click',()=>{
   cancelAnimationFrame(frame);
