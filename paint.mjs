@@ -1,5 +1,80 @@
 export const paper = '#eee7da';
 
+function smoothMask(region,cols,step) {
+  const cells=new Set(region);
+  const stride=cols+1;
+  const edges=new Map();
+  function edge(from,to,direction) {
+    if(!edges.has(from)) edges.set(from,[]);
+    edges.get(from).push({to,direction});
+  }
+  for(const cell of region) {
+    const x=cell%cols,y=Math.floor(cell/cols);
+    const v=y*stride+x;
+    if(!cells.has(cell-cols)) edge(v,v+1,0);
+    if(x===cols-1 || !cells.has(cell+1)) edge(v+1,v+stride+1,1);
+    if(!cells.has(cell+cols)) edge(v+stride+1,v+stride,2);
+    if(x===0 || !cells.has(cell-1)) edge(v+stride,v,3);
+  }
+  function simplify(points) {
+    const keep=new Uint8Array(points.length);
+    keep[0]=keep[points.length-1]=1;
+    const spans=[[0,points.length-1]];
+    while(spans.length) {
+      const [first,last]=spans.pop();
+      const [x,y]=points[first], [endX,endY]=points[last];
+      const dx=endX-x,dy=endY-y,length=dx*dx+dy*dy;
+      let farthest=0,best=.77;
+      for(let i=first+1;i<last;i++) {
+        const px=points[i][0]-x,py=points[i][1]-y;
+        const t=length?Math.max(0,Math.min(1,(px*dx+py*dy)/length)):0;
+        const distance=(px-t*dx)**2+(py-t*dy)**2;
+        if(distance>best) {best=distance;farthest=i;}
+      }
+      if(farthest) {
+        keep[farthest]=1;
+        spans.push([first,farthest],[farthest,last]);
+      }
+    }
+    return points.slice(0,-1).filter((_,i)=>keep[i]);
+  }
+  const path=new Path2D();
+  const rank=[1,0,3,2];
+  while(edges.size) {
+    const start=edges.keys().next().value;
+    let current=start,direction=edges.get(start)[0].direction;
+    const contour=[];
+    do {
+      contour.push([current%stride,Math.floor(current/stride)]);
+      const outgoing=edges.get(current);
+      if(!outgoing) break;
+      let selected=0;
+      for(let i=1;i<outgoing.length;i++) {
+        if(rank[(outgoing[i].direction-direction+4)%4]<rank[(outgoing[selected].direction-direction+4)%4]) selected=i;
+      }
+      const [next]=outgoing.splice(selected,1);
+      if(!outgoing.length) edges.delete(current);
+      current=next.to;
+      direction=next.direction;
+    } while(current!==start);
+    if(current!==start || contour.length<4) continue;
+    const simplified=contour.length>8?simplify([...contour,contour[0]]):contour;
+    const points=simplified.length>=3?simplified:contour;
+    const near=(a,b)=>{
+      const t=Math.min(.42,1.15/Math.hypot(b[0]-a[0],b[1]-a[1]));
+      return [step*(a[0]+(b[0]-a[0])*t),step*(a[1]+(b[1]-a[1])*t)];
+    };
+    path.moveTo(...near(points[0],points.at(-1)));
+    for(let i=0;i<points.length;i++) {
+      const [x,y]=points[i];
+      if(i) path.lineTo(...near(points[i],points[i-1]));
+      path.quadraticCurveTo(x*step,y*step,...near(points[i],points[(i+1)%points.length]));
+    }
+    path.closePath();
+  }
+  return path;
+}
+
 export function plan(source, brush, detail) {
   const {width: w, height: h} = source;
   const sample = document.createElement('canvas');
@@ -144,7 +219,7 @@ export function plan(source, brush, detail) {
   }
 
   function flats() {
-    const step = Math.max(1,Math.ceil(Math.max(w,h)/260));
+    const step = Math.max(1,Math.ceil(Math.max(w,h)/360));
     const cols = Math.ceil(w/step), rows = Math.ceil(h/step);
     const rgb = pixels(Math.max(.4,step*.42));
     const seen = new Uint8Array(cols*rows);
@@ -173,19 +248,11 @@ export function plan(source, brush, detail) {
         }
       }
       if (region.length<Math.max(9,seen.length*.00022)) continue;
-      region.sort((a,b)=>a-b);
-      const fill = new Path2D();
-      for (let i=0;i<region.length;) {
-        const first=region[i++], row=Math.floor(first/cols);
-        let last=first;
-        while (region[i]===last+1 && Math.floor(region[i]/cols)===row) last=region[i++];
-        fill.rect(first%cols*step,row*step,(last-first+1)*step,step);
-      }
       const point=[(sumX/region.length+.5)*step,(sumY/region.length+.5)*step];
       const pigment=[r,g,b].map(n=>Math.round(n/region.length));
       const background=Number(minX===0)+Number(minY===0)+Number(maxX===cols-1)+Number(maxY===rows-1)>1;
       const roundness=Math.min(maxX-minX+1,maxY-minY+1)/Math.max(maxX-minX+1,maxY-minY+1);
-      fills.push({fill,region,point,pigment,background,roundness});
+      fills.push({region,point,pigment,background,roundness});
     }
     const regions=fills.sort((a,b)=>b.region.length-a.region.length).slice(0,105);
     const anchors=[];
@@ -204,7 +271,8 @@ export function plan(source, brush, detail) {
       }
       return shape;
     }
-    const marks=regions.flatMap(({fill,region,point,pigment,background,roundness})=>{
+    const marks=regions.flatMap(({region,point,pigment,background,roundness})=>{
+      const fill=smoothMask(region,cols,step);
       const color='rgb('+pigment.join(',')+')';
       const shape=shapeAt(...point,pigment);
       const width=Math.max(step*2.2,Math.min(52*unit,Math.sqrt(region.length)*step*.38))*brush/100;
@@ -349,7 +417,7 @@ export function position(mark, fraction) {
 export function stroke(ctx, mark, fraction = 1) {
   if (mark.clip) {
     ctx.save();
-    ctx.clip(mark.clip);
+    ctx.clip(mark.clip,'evenodd');
   }
   const {points,width,color,opacity} = mark;
   const distance = position(mark,fraction);

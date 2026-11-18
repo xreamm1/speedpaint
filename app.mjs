@@ -1,4 +1,4 @@
-import {paper,plan,stroke,measure,position} from './paint.mjs';
+import {paper,plan,stroke,measure,position} from './paint.mjs?v=smooth-mask';
 import {finishPlan} from './finish.mjs';
 
 const $ = id => document.getElementById(id);
@@ -10,6 +10,7 @@ const savePng = $('save-png');
 const demo = $('demo');
 const demoVideo = $('demo-video');
 const demoToggle = $('demo-toggle');
+const demoFold = $('demo-fold');
 const uploadLink = $('upload-link');
 const phases = [...document.querySelectorAll('ol li')];
 const ctx = canvas.getContext('2d');
@@ -84,6 +85,7 @@ async function load(image) {
     const ratio = Math.min(1, 960/Math.max(picture.naturalWidth,picture.naturalHeight));
     canvas.width = picture.naturalWidth;
     canvas.height = picture.naturalHeight;
+    ctx.imageSmoothingQuality = 'high';
     painted.width = reference.width = Math.max(1,Math.round(canvas.width*ratio));
     painted.height = reference.height = Math.max(1,Math.round(canvas.height*ratio));
     const ref = reference.getContext('2d');
@@ -122,11 +124,30 @@ function syncDemoButton() {
 }
 demoVideo.addEventListener('play',syncDemoButton);
 demoVideo.addEventListener('pause',syncDemoButton);
+let demoVisible=false;
+let demoWantsPlayback=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+function updateDemoPlayback() {
+  if (demoWantsPlayback && demoVisible && !demoVideo.hidden && !demo.hidden) {
+    demoVideo.play().catch(syncDemoButton);
+  } else {
+    demoVideo.pause();
+  }
+}
 demoToggle.addEventListener('click',()=>{
-  if (demoVideo.paused) demoVideo.play().catch(syncDemoButton);
-  else demoVideo.pause();
+  demoWantsPlayback=demoVideo.paused;
+  updateDemoPlayback();
 });
-if (!matchMedia('(prefers-reduced-motion: reduce)').matches) demoVideo.play().catch(syncDemoButton);
+demoFold.addEventListener('click',()=>{
+  const collapsed=demo.classList.toggle('is-collapsed');
+  demoVideo.hidden=demoToggle.hidden=collapsed;
+  demoFold.setAttribute('aria-expanded',String(!collapsed));
+  demoFold.textContent=collapsed?'Развернуть видео':'Свернуть видео';
+  updateDemoPlayback();
+});
+new IntersectionObserver(([entry])=>{
+  demoVisible=entry.isIntersecting;
+  updateDemoPlayback();
+}).observe(demo);
 surface.addEventListener('dragover',event=>{
   event.preventDefault();
   if (!exporting) surface.classList.add('over');
