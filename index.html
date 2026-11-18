@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=full-video">
-<script type="module" src="./app.mjs?v=graphite"></script>
+<link rel="stylesheet" href="./style.css?v=scroll-upload">
+<script type="module" src="./app.mjs?v=scroll-upload"></script>
 </head>
 <body>
 <main>
@@ -17,7 +17,7 @@
 <span>Speedpaint</span>
 </div>
 <div id="source" hidden><span id="filename"></span><span id="dimensions"></span></div>
-<button id="choose" class="primary">Выбрать фото</button>
+<a id="upload-link" href="#upload">К загрузке <span aria-hidden="true">↓</span></a>
 <button id="replace" hidden>Заменить фото</button>
 <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
 </header>
@@ -31,10 +31,11 @@
 <section class="workspace" aria-label="Холст">
 <div id="surface">
 <div id="drop">
-<h1>Рисование по фото</h1>
+<h1 id="upload">Рисование по фото</h1>
 <div class="upload-card">
 <h2>Загрузите изображение</h2>
-<p class="intro">Перетащите JPG, PNG или WEBP сюда или выберите файл в шапке. Speedpaint превратит фото в рисунок и запишет процесс.</p>
+<p class="intro">Перетащите JPG, PNG или WEBP сюда или выберите файл. Speedpaint превратит фото в рисунок и запишет процесс.</p>
+<button id="choose" class="primary">Выбрать фото</button>
 <p id="status" role="status">Фото обрабатывается на устройстве.</p>
 </div>
 </div>

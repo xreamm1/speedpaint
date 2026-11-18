@@ -11,19 +11,19 @@ h1{font-size:clamp(30px,4vw,50px);line-height:1;letter-spacing:-.065em;font-weig
 body:not(.has-photo) main{max-width:none;min-height:100svh}
 body:not(.has-photo) header,body:not(.has-photo) .studio{max-width:1084px;margin-inline:auto}
 body:not(.has-photo) header{min-height:54px}
-.demo{position:relative;display:grid;height:clamp(310px,67svh,570px);margin:12px calc(-1 * clamp(16px,4vw,58px)) 0;
+.demo{position:relative;display:grid;height:max(310px,calc(100svh - 84px));margin:12px calc(-1 * clamp(16px,4vw,58px)) 0;
   overflow:hidden;border-top:1px solid #24232a;background:#0d0b13}
 .demo::after{content:"";position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(0deg,var(--paper),#0b0b0d9c 11%,transparent 29%)}
 .demo video{width:100%;height:100%;min-height:0;object-fit:cover;object-position:50% 47%;filter:brightness(.64) saturate(.86)}
 #demo-toggle{position:absolute;z-index:1;top:clamp(32px,13vh,86px);right:clamp(18px,4vw,48px);width:42px;height:42px;
   padding:0;display:grid;place-items:center;border:0;border-radius:50%;background:#f4f3f6;color:#151419;font-size:15px;font-weight:750}
-body:not(.has-photo) .studio{grid-template-columns:minmax(0,1fr);padding-top:6px}
+body:not(.has-photo) .studio{grid-template-columns:minmax(0,1fr);padding-top:24px;padding-bottom:24px}
 body:not(.has-photo) aside{display:none}
 body:not(.has-photo) .workspace{display:grid;align-items:stretch}
 body:not(.has-photo) #surface{justify-items:stretch;min-height:0;border:0;border-radius:0;padding:0;background:none}
 body:not(.has-photo) #surface.over{outline:none}
-#replace,#choose{margin-left:auto;flex:none}
+#replace,#upload-link{margin-left:auto;flex:none}
 #replace{background:var(--panel)}
 #source{min-width:0;display:flex;gap:10px;font-size:12px;color:var(--muted)}
 #filename{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -33,13 +33,15 @@ body:not(.has-photo) #surface.over{outline:none}
 #surface.over{outline:2px dashed var(--accent);outline-offset:-8px}
 #surface.over:has(canvas:not([hidden])){outline-color:#d7b6ce}
 #drop{display:grid;gap:16px;min-width:0}
-#drop h1{font-size:clamp(29px,4.4vw,49px);font-weight:750;text-shadow:none}
+#drop h1{font-size:clamp(29px,4.4vw,49px);font-weight:750;text-shadow:none;scroll-margin-top:18px}
 .upload-card{padding:clamp(14px,2.3vw,25px);border:1px solid #29292d;border-radius:8px;background:var(--panel)}
 .upload-card h2{margin-bottom:7px;font-size:19px}
 #surface.over .upload-card{border-color:var(--accent)}
 .intro{max-width:620px;color:var(--muted);line-height:1.55}
-#choose{padding:10px 15px;border-radius:999px;background:#b91d64;border-color:#db5b913d;color:white;font-weight:700;font-size:13px}
-#choose:not(:disabled):hover{background:#d12b76}
+#upload-link,#choose{padding:10px 15px;border:1px solid #db5b913d;border-radius:999px;background:#b91d64;color:white;font-weight:700;font-size:13px;text-decoration:none}
+#choose{margin-top:15px}
+#upload-link:hover,#choose:not(:disabled):hover{background:#d12b76}
+#upload-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 canvas{display:block;max-width:100%;max-height:78vh;width:auto;height:auto;object-fit:contain}
 .timeline{padding-top:13px}
 ol{position:relative;height:27px;padding:0;margin:0;list-style:none;font-size:12px;color:var(--muted)}

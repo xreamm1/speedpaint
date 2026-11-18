@@ -10,6 +10,7 @@ const savePng = $('save-png');
 const demo = $('demo');
 const demoVideo = $('demo-video');
 const demoToggle = $('demo-toggle');
+const uploadLink = $('upload-link');
 const phases = [...document.querySelectorAll('ol li')];
 const ctx = canvas.getContext('2d');
 const reference = document.createElement('canvas');
@@ -92,7 +93,7 @@ async function load(image) {
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
-    drop.hidden = demo.hidden = choose.hidden = true;
+    drop.hidden = demo.hidden = uploadLink.hidden = true;
     demoVideo.pause();
     document.body.classList.add('has-photo');
     playback.after(status);
