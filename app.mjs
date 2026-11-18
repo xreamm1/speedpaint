@@ -90,6 +90,8 @@ async function load(image) {
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
     drop.hidden = true;
+    document.body.classList.add('has-photo');
+    playback.after(status);
     dimensions.textContent = canvas.width+' × '+canvas.height+' px';
     ready = true;
     wipe();
