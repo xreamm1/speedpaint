@@ -222,10 +222,11 @@ savePng.addEventListener('click',()=>{
 download.addEventListener('click',()=>{
   cancelAnimationFrame(frame);
   running = false;
-  let stream, recorder, hold;
+  let stream, recorder, hold, still;
   const chunks = [];
   function finish(message) {
     clearTimeout(hold);
+    clearInterval(still);
     cancelAnimationFrame(frame);
     stream?.getTracks().forEach(track=>track.stop());
     running = exporting = false;
@@ -254,7 +255,17 @@ download.addEventListener('click',()=>{
     const rate = +speed.value;
     exporting = true;
     status.textContent = 'Записываю видео с начала. Оставьте вкладку открытой.';
-    play(()=>rate,()=>{ hold = setTimeout(()=>recorder.stop(),550); });
+    play(()=>rate,()=>{
+      // Keep feeding a cursor-free canvas while the encoder drains its last frames.
+      const [track]=stream.getVideoTracks();
+      const showFinal=()=>{
+        ctx.drawImage(painted,0,0,canvas.width,canvas.height);
+        track.requestFrame?.();
+      };
+      showFinal();
+      still=setInterval(showFinal,1000/30);
+      hold=setTimeout(()=>recorder.stop(),700);
+    });
   } catch {
     finish('Запись видео недоступна в этом браузере.');
   }
