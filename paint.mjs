@@ -181,9 +181,42 @@ export function plan(source, brush, detail) {
       const center=region[Math.floor(region.length/2)];
       const point=[(center%cols+.5)*step,(Math.floor(center/cols)+.5)*step];
       const color='rgb('+[r,g,b].map(n=>Math.round(n/region.length)).join(',')+')';
-      fills.push({fill,points:[point],color,opacity:.88,area:region.length,pace:1+Math.min(2,region.length/400)});
+      fills.push({fill,region,point,color});
     }
-    return fills.sort((a,b)=>b.area-a.area).slice(0,105);
+    return fills.sort((a,b)=>b.region.length-a.region.length).slice(0,105).flatMap(({fill,region,point,color})=>{
+      const width=Math.max(step*2.2,Math.min(52*unit,Math.sqrt(region.length)*step*.38))*brush/100;
+      const lane=Math.max(step,width*.88);
+      const angle=.18+(random()-.5)*.48;
+      const dx=Math.cos(angle), dy=Math.sin(angle);
+      const bands=new Map();
+      for (const cell of region) {
+        const x=(cell%cols+.5)*step, y=(Math.floor(cell/cols)+.5)*step;
+        const band=Math.round((y*dx-x*dy)/lane);
+        if (!bands.has(band)) bands.set(band,[]);
+        bands.get(band).push({along:x*dx+y*dy,x,y});
+      }
+      const result=[];
+      let reverse=false, last=point;
+      for (const [,cells] of [...bands].sort(([a],[b])=>a-b)) {
+        cells.sort((a,b)=>reverse?b.along-a.along:a.along-b.along);
+        for (let i=0;i<cells.length;) {
+          const start=i++;
+          while (i<cells.length && Math.abs(cells[i].along-cells[i-1].along)<Math.max(step*2.4,width*.75)) i++;
+          const a=cells[start], b=cells[i-1];
+          const length=Math.abs(a.along-b.along);
+          if (i-start<3 && region.length>20) continue;
+          const points=[[a.x,a.y]];
+          const bend=(random()-.5)*Math.min(width*.65,length*.24);
+          if (length>step) points.push([(a.x+b.x)/2-dy*bend,(a.y+b.y)/2+dx*bend]);
+          points.push(length>step?[b.x,b.y]:[a.x+dx*step*.55,a.y+dy*step*.55]);
+          result.push({clip:fill,points,width:width*(.93+random()*.14),color,
+            opacity:.68+random()*.16,pace:.8+random()*.38,lift:Math.hypot(a.x-last[0],a.y-last[1])});
+          last=points.at(-1);
+        }
+        reverse=!reverse;
+      }
+      return result;
+    });
   }
 
   function paint(size, blur, opacity, fine) {
@@ -240,17 +273,37 @@ export function plan(source, brush, detail) {
   return [outline,base,[...middle,...fine,...accents]];
 }
 
+export function measure(mark) {
+  const arc=[0];
+  for (let i=1;i<mark.points.length;i++) {
+    const [x,y]=mark.points[i], [px,py]=mark.points[i-1];
+    arc.push(arc[i-1]+Math.hypot(x-px,y-py));
+  }
+  mark.arc=arc;
+  return arc.at(-1);
+}
+
+export function position(mark, fraction) {
+  const {points,arc}=mark;
+  if (fraction>=1) return points.length-1;
+  if (fraction<=0 || !arc.at(-1)) return 0;
+  const distance=arc.at(-1)*fraction;
+  let low=0, high=arc.length-1;
+  while (high-low>1) {
+    const middle=(low+high)>>1;
+    if (arc[middle]<=distance) low=middle;
+    else high=middle;
+  }
+  return low+(distance-arc[low])/(arc[high]-arc[low]);
+}
+
 export function stroke(ctx, mark, fraction = 1) {
-  if (mark.fill) {
-    if (fraction<1) return;
-    ctx.globalAlpha = mark.opacity;
-    ctx.fillStyle=mark.color;
-    ctx.fill(mark.fill);
-    ctx.globalAlpha=1;
-    return;
+  if (mark.clip) {
+    ctx.save();
+    ctx.clip(mark.clip);
   }
   const {points,width,color,opacity} = mark;
-  const distance = (points.length-1)*fraction;
+  const distance = position(mark,fraction);
   ctx.globalAlpha = opacity;
   ctx.lineWidth = width;
   ctx.fillStyle = ctx.strokeStyle = color;
@@ -291,4 +344,5 @@ export function stroke(ctx, mark, fraction = 1) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+  if (mark.clip) ctx.restore();
 }

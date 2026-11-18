@@ -1,4 +1,4 @@
-import {paper,plan,stroke} from './paint.mjs';
+import {paper,plan,stroke,measure,position} from './paint.mjs';
 import {finishPlan} from './finish.mjs';
 
 const $ = id => document.getElementById(id);
@@ -11,8 +11,7 @@ const ctx = canvas.getContext('2d');
 const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
-const finishAt = .67;
-const limits = [0, .27, .49, finishAt];
+const limits = [0, .27, .60, .85, 1];
 const duration = 30000;
 const formats = ['video/webm;codecs=vp8','video/webm','video/mp4'];
 const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
@@ -20,8 +19,6 @@ const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
 let ready = false, loading = false, running = false, exporting = false;
 let time = 0, frame = 0, previous = 0, generation = 0;
 let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
-let original, originalPng;
-let finish, hand;
 
 function controls() {
   const busy = loading || exporting;
@@ -37,7 +34,6 @@ function controls() {
 }
 function wipe() {
   time = phase = index = 0;
-  finish = hand = null;
   progress.value = 0;
   for (const item of phases) item.classList.remove('active');
   ink.fillStyle = paper;
@@ -79,8 +75,6 @@ async function load(image) {
     ref.fillStyle = paper;
     ref.fillRect(0,0,reference.width,reference.height);
     ref.drawImage(picture,0,0,reference.width,reference.height);
-    original = picture;
-    originalPng = image.type==='image/png' ? image : null;
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = false;
@@ -117,54 +111,42 @@ for (const slider of [speed,brush,detail]) {
     output.value = slider===speed ? slider.value.replace('.',',')+'×' : slider.value+'%';
   });
 }
-function prepare() {
-  sequence = plan(reference,+brush.value,+detail.value).map((marks,stage)=>{
-    let end = 0;
-    const timing = marks.map(mark=>{
-      let length = 0;
-      for (let i=1; i<mark.points.length; i++) {
-        length += Math.hypot(mark.points[i][0]-mark.points[i-1][0],mark.points[i][1]-mark.points[i-1][1]);
-      }
-      const lift = stage===0 ? Math.min(15,Math.sqrt(mark.lift || 0)*.85) : 0;
-      const begin = end+lift;
-      end = begin+(5+Math.sqrt(length)*(stage===0?3:1))*(mark.pace || 1);
-      return {begin,end};
-    });
-    return {marks,timing,end};
+function schedule(marks,stage) {
+  let end = 0;
+  const timing = marks.map(mark=>{
+    const length=measure(mark);
+    const lift=Math.min(15,Math.sqrt(mark.lift || 0)*.85);
+    const begin=end+lift;
+    end=begin+(5+Math.sqrt(length)*(stage===0?3:1))*(mark.pace || 1);
+    return {begin,end};
   });
+  return {marks,timing,end};
+}
+function prepare() {
+  sequence = plan(reference,+brush.value,+detail.value).map(schedule);
   wipe();
 }
 function render(fraction) {
-  if (finish) {
-    nib(finish(Math.min(1,(fraction-finishAt)/(1-finishAt))));
-    progress.value=fraction;
-    return;
-  }
-  while (phase<2 && fraction>=limits[phase+1]) {
+  while (phase<3 && fraction>=limits[phase+1]) {
     const {marks} = sequence[phase];
     while (index<marks.length) stroke(ink,marks[index++]);
     phase++;
     index = 0;
+    if (phase===3) sequence.push(schedule(finishPlan(ink,reference,+detail.value),phase));
   }
   const {marks,timing,end} = sequence[phase];
-  const value = end*(Math.min(fraction,finishAt)-limits[phase])/(limits[phase+1]-limits[phase]);
-  while (index<marks.length && (timing[index].end<=value || fraction>=finishAt)) stroke(ink,marks[index++]);
+  const value = end*(fraction-limits[phase])/(limits[phase+1]-limits[phase]);
+  while (index<marks.length && (timing[index].end<=value || fraction===1)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0,canvas.width,canvas.height);
-  if (fraction>=finishAt) {
-    finish=finishPlan(ctx,original,hand);
-    nib(finish(Math.min(1,(fraction-finishAt)/(1-finishAt))));
-    progress.value=fraction;
-    return;
-  }
   if (index<marks.length) {
     const {begin,end: stop} = timing[index];
     const t = Math.max(0,(value-begin)/(stop-begin));
     const eased = t*t*t*(10+t*(-15+6*t));
     const scaleX=canvas.width/painted.width, scaleY=canvas.height/painted.height;
     const points=marks[index].points;
-    const position=eased*(points.length-1);
-    const a=points[Math.floor(position)], b=points[Math.ceil(position)];
-    const u=position-Math.floor(position);
+    const along=position(marks[index],eased);
+    const a=points[Math.floor(along)], b=points[Math.ceil(along)];
+    const u=along-Math.floor(along);
     const tip=[(a[0]+(b[0]-a[0])*u)*scaleX,(a[1]+(b[1]-a[1])*u)*scaleY];
     if (eased>0) {
       ctx.save();
@@ -177,10 +159,9 @@ function render(fraction) {
       tip[0]=last[0]*scaleX+(tip[0]-last[0]*scaleX)*lift;
       tip[1]=last[1]*scaleY+(tip[1]-last[1]*scaleY)*lift;
     }
-    hand=tip;
     nib(tip);
   }
-  phases.forEach((item,i)=>item.classList.toggle('active',i===phase));
+  phases.forEach((item,i)=>item.classList.toggle('active',i===Math.min(2,phase)));
   progress.value = fraction;
 }
 
@@ -233,14 +214,10 @@ function save(blob, name) {
 }
 savePng.addEventListener('click',()=>{
   const name = photoName+'-final.png';
-  if (originalPng) {
-    save(originalPng,name);
-  } else {
-    canvas.toBlob(blob=>{
-      if (blob) save(blob,name);
-      else status.textContent = 'Не удалось сохранить PNG.';
-    },'image/png');
-  }
+  canvas.toBlob(blob=>{
+    if (blob) save(blob,name);
+    else status.textContent = 'Не удалось сохранить PNG.';
+  },'image/png');
 });
 download.addEventListener('click',()=>{
   cancelAnimationFrame(frame);
