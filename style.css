@@ -8,18 +8,17 @@ h1,h2,p{margin:0}
 h1{font-size:clamp(30px,4vw,50px);line-height:1;letter-spacing:-.065em;font-weight:680;text-shadow:0 1px 5px #000}
 .wordmark{display:flex;align-items:center;gap:9px;font-size:21px;font-weight:750;letter-spacing:-.04em}
 .wordmark svg{width:31px;height:31px;flex:none}
-body:not(.has-photo) main{max-width:1200px;min-height:100svh}
+body:not(.has-photo) main{max-width:none;min-height:100svh}
+body:not(.has-photo) header,body:not(.has-photo) .studio{max-width:1084px;margin-inline:auto}
 body:not(.has-photo) header{min-height:54px}
-.demo{position:relative;isolation:isolate;display:grid;place-items:center;height:clamp(210px,40vw,440px);margin:12px calc(-1 * clamp(16px,4vw,58px)) 0;
-  overflow:hidden;border-block:1px solid #24232a;background:#0d0b13}
-.demo::before{content:"";position:absolute;inset:-22px;z-index:-1;background:url(./demo.webp) center / cover no-repeat;
-  filter:blur(22px) brightness(.27) saturate(.8)}
+.demo{position:relative;display:grid;height:clamp(310px,67svh,570px);margin:12px calc(-1 * clamp(16px,4vw,58px)) 0;
+  overflow:hidden;border-top:1px solid #24232a;background:#0d0b13}
 .demo::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(0deg,var(--paper) 0%,#16102212 34%,#25133328 100%)}
-.demo video{width:100%;height:100%;min-height:0;object-fit:contain;filter:brightness(.64) saturate(.86)}
-#demo-toggle{position:absolute;z-index:1;top:12px;right:clamp(18px,4vw,48px);width:42px;height:42px;
+  background:linear-gradient(0deg,var(--paper),#0b0b0d9c 11%,transparent 29%)}
+.demo video{width:100%;height:100%;min-height:0;object-fit:cover;object-position:50% 47%;filter:brightness(.64) saturate(.86)}
+#demo-toggle{position:absolute;z-index:1;top:clamp(32px,13vh,86px);right:clamp(18px,4vw,48px);width:42px;height:42px;
   padding:0;display:grid;place-items:center;border:0;border-radius:50%;background:#f4f3f6;color:#151419;font-size:15px;font-weight:750}
-body:not(.has-photo) .studio{grid-template-columns:minmax(0,1fr);padding-top:10px}
+body:not(.has-photo) .studio{grid-template-columns:minmax(0,1fr);padding-top:6px}
 body:not(.has-photo) aside{display:none}
 body:not(.has-photo) .workspace{display:grid;align-items:stretch}
 body:not(.has-photo) #surface{justify-items:stretch;min-height:0;border:0;border-radius:0;padding:0;background:none}
