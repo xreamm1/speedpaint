@@ -320,20 +320,27 @@ export function plan(source, brush, detail) {
     return {marks,shapeAt};
   }
 
-  function paint(size, blur, opacity, fine) {
+  function paint(size, blur, opacity, budget, fine) {
     const rgb = pixels(blur);
     const {angle,strength} = gradient(rgb);
-    const spacing = Math.max(2, size*(fine?.79:.65));
+    const spacing = Math.max(2.6,Math.sqrt(w*h/budget));
     const marks = [];
     for (let y=spacing/2; y<h+spacing/2; y+=spacing) {
       for (let x=spacing/2; x<w+spacing/2; x+=spacing) {
-        const px = clamp(x+(random()-.5)*spacing*.7,w);
-        const py = clamp(y+(random()-.5)*spacing*.7,h);
-        const i = at(px,py);
-        if (fine && strength[i] < 24 && random() > detail/250) continue;
+        let px = clamp(x+(random()-.5)*spacing*.6,w);
+        let py = clamp(y+(random()-.5)*spacing*.6,h);
+        let i = at(px,py);
+        if (fine) {
+          const step=spacing*.23;
+          for(const [dx,dy] of [[-step,0],[step,0],[0,-step],[0,step]]) {
+            const tx=clamp(x+dx,w),ty=clamp(y+dy,h),pixel=at(tx,ty);
+            if(strength[pixel]>strength[i]) { px=tx;py=ty;i=pixel; }
+          }
+          if (strength[i]<20) continue;
+        }
         const width = size*(.84+random()*.40);
         const bend = (random()-.5)*.55;
-        const steps = 3+Math.floor(random()*4);
+        const steps = fine ? 5+Math.floor(random()*6) : 8+Math.floor(random()*7);
         const step = Math.max(.6,width*.23);
         const direction = index => strength[index]>22 ? angle[index]+Math.PI/2+bend : -.55+bend;
         const rgbIndex = i*4;
@@ -357,9 +364,15 @@ export function plan(source, brush, detail) {
         }
         const points = [...half(-1).reverse(),[px,py],...half(1)];
         const color = 'rgb('+rgb.slice(rgbIndex,rgbIndex+3).join(',')+')';
+        const paintColors=!fine && points.length>2 ? [0,.33,.66,1].map(t=>{
+          const [x,y]=points[Math.round(t*(points.length-1))];
+          const offset=Math.max(1,width*.13);
+          const samples=[at(x,y),at(x-offset,y),at(x+offset,y),at(x,y-offset),at(x,y+offset)];
+          return 'rgb('+[0,1,2].map(k=>Math.round(samples.reduce((sum,p)=>sum+rgb[4*p+k],0)/5)).join(',')+')';
+        }) : null;
         const group = Math.floor(px/(spacing*5)) + Math.floor(py/(spacing*5))*Math.ceil(w/(spacing*5));
-        marks.push({points,width,color,opacity:opacity*(.82+random()*.18),
-          center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],
+        marks.push({points,width,color,paintColors,opacity:opacity*(.82+random()*.18),
+          center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],pressure:.52,
           score:Math.sin(group*192.27)*.44 + random()*.47 + (fine?strength[i]/1500:0)});
       }
     }
@@ -369,8 +382,8 @@ export function plan(source, brush, detail) {
   const outline = sketch(gradient(pixels(Math.max(.65,unit))));
   const scale = brush/100*unit;
   const {marks:base,shapeAt} = flats();
-  const middle = paint(Math.max(2.8,15*scale),Math.max(.45,1.35*scale),.72,true);
-  const fine = paint(Math.max(1.8,(9-detail*.059)*scale),Math.max(.3,.60*scale),.85,true);
+  const middle = paint(Math.max(4,30*scale),Math.max(.35,.95*scale),.90,475,false);
+  const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*.95,true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
   const byShape=(a,b)=>a.shape-b.shape;
   const foundation=base.filter(mark=>mark.mass);
@@ -385,8 +398,9 @@ export function plan(source, brush, detail) {
       (pass && (mark.edge>80 || value>222)?edges:tones).push(mark);
     }
   }
+  const row=mark=>Math.floor(mark.center[1]/(34*unit));
   const local=(a,b)=>byShape(a,b)||a.tone-b.tone||a.pass-b.pass||
-    Math.floor(a.center[1]/(18*unit))-Math.floor(b.center[1]/(18*unit))||a.center[0]-b.center[0];
+    row(a)-row(b)||(row(a)%2 ? b.center[0]-a.center[0] : a.center[0]-b.center[0]);
   return [outline,[...foundation,...colorStudies],[...tones.sort(local),...edges.sort(local),...accents]];
 }
 
@@ -414,14 +428,14 @@ export function position(mark, fraction) {
   return low+(distance-arc[low])/(arc[high]-arc[low]);
 }
 
-export function stroke(ctx, mark, fraction = 1) {
+export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
   if (mark.clip) {
     ctx.save();
     ctx.clip(mark.clip,'evenodd');
   }
   const {points,width,color,opacity} = mark;
   const distance = position(mark,fraction);
-  ctx.globalAlpha = opacity;
+  ctx.globalAlpha = opacity*opacityScale;
   ctx.lineWidth = width;
   let pigment=color;
   if (mark.clip) {
@@ -430,6 +444,9 @@ export function stroke(ctx, mark, fraction = 1) {
     pigment.addColorStop(.21,color);
     pigment.addColorStop(.75,color);
     pigment.addColorStop(1,color.replace('rgb(','rgba(').replace(')',',.42)'));
+  } else if (mark.paintColors) {
+    pigment=ctx.createLinearGradient(...points[0],...points.at(-1));
+    mark.paintColors.forEach((value,i)=>pigment.addColorStop(i/(mark.paintColors.length-1),value));
   }
   ctx.fillStyle = ctx.strokeStyle = pigment;
   ctx.lineCap = ctx.lineJoin = 'round';
@@ -445,7 +462,7 @@ export function stroke(ctx, mark, fraction = 1) {
       const before = points[Math.max(0,i-2)], after = points[Math.min(points.length-1,i+1)];
       const heading = Math.atan2(after[1]-before[1],after[0]-before[0])+Math.PI/2;
       const u = Math.min(i,distance)/(points.length-1);
-      const contact=mark.clip?.55:.20;
+      const contact=mark.clip?.55:mark.paintColors?.48:.20;
       const radius = width*.5*(contact+(1-contact)*Math.pow(Math.sin(Math.PI*u),.52))*
         (.83+.17*Math.sin(i*.49+mark.pressure*6));
       const dx = Math.cos(heading)*radius, dy = Math.sin(heading)*radius;

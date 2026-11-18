@@ -6,12 +6,12 @@
 <meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=fold">
-<script type="module" src="./app.mjs?v=fold"></script>
+<link rel="stylesheet" href="./style.css?v=workbench">
+<script type="module" src="./app.mjs?v=workbench"></script>
 </head>
 <body>
-<main>
 <header>
+<div class="header-inner">
 <div class="wordmark" aria-label="Speedpaint">
 <svg aria-hidden="true" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7H8a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V13M12 21l2-6L25 4l4 4-11 11-6 2Zm11-15 4 4"/></svg>
 <span>Speedpaint</span>
@@ -20,26 +20,35 @@
 <a id="upload-link" href="#upload">К загрузке <span aria-hidden="true">↓</span></a>
 <button id="replace" hidden>Заменить фото</button>
 <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
-</header>
-<div id="demo" class="demo" aria-label="Пример рисования">
-<video id="demo-video" muted playsinline loop preload="metadata" poster="./demo.webp" aria-label="Пример спидпеинта яблока">
-<source src="./demo.webm" type="video/webm">
-</video>
-<button id="demo-toggle" type="button" aria-label="Воспроизвести пример">▶</button>
-<button id="demo-fold" type="button" aria-controls="demo-video" aria-expanded="true">Свернуть видео</button>
 </div>
-<div class="studio">
-<section class="workspace" aria-label="Холст">
-<div id="surface">
+</header>
+<main>
+<div id="demo" class="demo" aria-label="Примеры рисования">
+<div class="demo-track"><div class="demo-media">
+<div id="demo-gallery" class="demo-gallery">
+<figure><video id="demo-video" muted playsinline loop preload="metadata" poster="./demo-apple.webp" src="./demo-apple.webm" aria-label="Пример рисования яблока"></video><figcaption>Яблоко</figcaption></figure>
+<figure><video muted playsinline loop preload="none" poster="./demo-fruits.webp" src="./demo-fruits.webm" aria-label="Пример рисования натюрморта"></video><figcaption>Натюрморт</figcaption></figure>
+<figure><video muted playsinline loop preload="none" poster="./demo-ink.webp" src="./demo-ink.webm" aria-label="Пример рисования иллюстрации"></video><figcaption>Иллюстрация</figcaption></figure>
+</div>
+<div class="demo-shade" aria-hidden="true"></div>
+<button id="demo-toggle" type="button" aria-label="Воспроизвести примеры">▶</button>
+</div></div>
+<button id="demo-fold" type="button" aria-controls="demo-gallery" aria-expanded="true">Свернуть видео</button>
+</div>
+<section id="upload" class="upload-section" aria-labelledby="upload-title">
+<h1 id="upload-title">Рисование по фото</h1>
 <div id="drop">
-<h1 id="upload">Рисование по фото</h1>
 <div class="upload-card">
 <h2>Загрузите изображение</h2>
 <p class="intro">Перетащите JPG, PNG или WEBP сюда или выберите файл. Speedpaint превратит фото в рисунок и запишет процесс.</p>
 <button id="choose" class="primary">Выбрать фото</button>
-<p id="status" role="status">Фото обрабатывается на устройстве.</p>
+<p id="upload-status" role="status">Фото обрабатывается на устройстве.</p>
 </div>
 </div>
+</section>
+<div id="editor" class="studio" hidden>
+<section class="workspace" aria-label="Холст">
+<div id="surface">
 <canvas id="canvas" hidden aria-label="Текущий рисунок"></canvas>
 </div>
 <div id="playback" hidden>
@@ -51,13 +60,14 @@
 <button id="start" class="primary" disabled>Старт</button>
 <button id="reset" disabled>Сбросить</button>
 <label class="speed" for="speed">Скорость <input id="speed" type="range" min=".25" max="4" step=".25" value="1"><output for="speed">1×</output></label>
-<span id="clock">0:00 / 0:30</span>
+<span id="clock">0:00 / 1:04</span>
 </div>
 <div id="downloads" hidden>
 <button id="export" class="primary" disabled>Скачать видео</button>
 <button id="save-png" disabled>Сохранить PNG</button>
 </div>
 </div>
+<p id="status" role="status"></p>
 </section>
 <aside aria-label="Настройки кисти">
 <h2>Настройки</h2>

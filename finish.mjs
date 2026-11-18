@@ -1,7 +1,16 @@
 // Use the remaining error to place accents. Each mark mixes a local pigment.
 export function finishPlan(ctx, reference, detail) {
   const {width,height}=reference;
-  const actual=ctx.getImageData(0,0,width,height).data;
+  let sample=ctx;
+  if(ctx.canvas.width!==width || ctx.canvas.height!==height) {
+    const canvas=document.createElement('canvas');
+    canvas.width=width;
+    canvas.height=height;
+    sample=canvas.getContext('2d');
+    sample.imageSmoothingQuality='high';
+    sample.drawImage(ctx.canvas,0,0,width,height);
+  }
+  const actual=sample.getImageData(0,0,width,height).data;
   const source=reference.getContext('2d').getImageData(0,0,width,height).data;
   const at=(x,y)=>4*(Math.max(0,Math.min(width-1,Math.round(x)))+
     width*Math.max(0,Math.min(height-1,Math.round(y))));
