@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#141414">
+<meta name="theme-color" content="#fff3df">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
@@ -12,7 +12,7 @@
 <body>
 <main>
 <header>
-<h1>Спидпеинт</h1>
+<h1>Speedpaint<span aria-hidden="true">✦</span></h1>
 <div id="source" hidden><span id="filename"></span><span id="dimensions"></span></div>
 <div class="upload">
 <input type="file" id="file" accept="image/jpeg,image/png,image/webp" aria-label="Выбрать фото">
@@ -23,6 +23,17 @@
 <section class="workspace" aria-label="Холст">
 <div id="surface">
 <label id="drop" for="file">
+<span class="drop-art" aria-hidden="true">
+<span class="spark spark-left">✦</span>
+<span class="picture">
+<svg viewBox="0 0 80 60" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 47 24 27l13 14 15-20 24 29v6H4z" fill="#ee59bb"/>
+<circle cx="29" cy="15" r="6" fill="#fff3df"/>
+<path d="M4 56h72"/>
+</svg>
+</span>
+<span class="spark spark-right">✧</span>
+</span>
 <strong>Перетащите фото сюда</strong>
 <small>JPG, PNG, WEBP</small>
 </label>
@@ -34,6 +45,7 @@
 </div>
 </section>
 <aside aria-label="Настройки и управление">
+<h2>Настройки</h2>
 <label class="setting" for="speed">Скорость <output for="speed">1×</output></label>
 <input id="speed" type="range" min=".25" max="4" step=".25" value="1">
 <label class="setting" for="brush">Размер кисти <output for="brush">100%</output></label>
