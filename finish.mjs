@@ -78,5 +78,11 @@ export function finishPlan(ctx, reference, detail) {
     ordered.push(mark);
     tip=mark.points.at(-1);
   }
-  return ordered;
+  const layers=[];
+  for(let i=0;i<ordered.length;i+=8) {
+    const area=ordered.slice(i,i+8);
+    layers.push(...area.map(mark=>({...mark,opacity:mark.opacity*.40,width:mark.width*1.12})));
+    layers.push(...area.map(mark=>({...mark,opacity:mark.opacity*.60/(1-mark.opacity*.40)})));
+  }
+  return layers;
 }

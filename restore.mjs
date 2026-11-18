@@ -99,23 +99,20 @@ export function restorePlan(ctx, original, previous) {
   }
 
   let operation=0, substep=0, previousTip;
+  const initial=target.data.slice();
+  const fading=[];
+  const settle=Math.max(1,operations.length*.038);
   return function render(progress) {
-    const value=progress*operations.length;
-    const end=Math.floor(value);
+    const value=progress*(operations.length+settle);
+    const end=Math.min(operations.length,Math.floor(value));
     let left=width,top=height,right=0,bottom=0;
     function dirty(x0,y0,x1,y1) {
       left=Math.min(left,x0);top=Math.min(top,y0);
       right=Math.max(right,x1);bottom=Math.max(bottom,y1);
     }
-    function add(step) {
-      for (const cell of step.cells) {
-        const x=cell%cols,y=Math.floor(cell/cols);
-        for (let py=ys[y];py<ys[y+1];py++) {
-          const start=py*width+xs[x], stop=py*width+xs[x+1];
-          before.set(after.subarray(start,stop),start);
-        }
-        dirty(xs[x],ys[y],xs[x+1],ys[y+1]);
-      }
+    function queue(trail,index) {
+      const hit=operation+index/trail.length;
+      for (const cell of trail[index].cells) fading.push({cell,hit});
     }
     if (previousTip) {
       const [x,y]=previousTip;
@@ -124,14 +121,29 @@ export function restorePlan(ctx, original, previous) {
     }
     for (;operation<end;operation++,substep=0) {
       const trail=operations[operation];
-      for (;substep<trail.length;substep++) add(trail[substep]);
+      for (;substep<trail.length;substep++) queue(trail,substep);
     }
     const trail=operations[operation];
     if (trail) {
       const t=value-end;
-      const target=Math.min(trail.length,Math.ceil(t*t*(3-2*t)*trail.length));
-      for (;substep<target;substep++) add(trail[substep]);
+      const count=Math.min(trail.length,Math.floor(t*trail.length)+1);
+      for (;substep<count;substep++) queue(trail,substep);
     }
+    let active=0;
+    for (const item of fading) {
+      const {cell,hit}=item;
+      const t=Math.max(0,Math.min(1,(value-hit)/settle));
+      const strength=t*t*(3-2*t);
+      const x=cell%cols,y=Math.floor(cell/cols);
+      for (let py=ys[y];py<ys[y+1];py++) {
+        const start=py*width+xs[x], stop=py*width+xs[x+1];
+        if (t===1) before.set(after.subarray(start,stop),start);
+        else for (let p=start*4;p<stop*4;p++) target.data[p]=initial[p]+(source.data[p]-initial[p])*strength;
+      }
+      dirty(xs[x],ys[y],xs[x+1],ys[y+1]);
+      if (t<1) fading[active++]=item;
+    }
+    fading.length=active;
     if (right>left && bottom>top) ctx.putImageData(target,0,0,left,top,right-left,bottom-top);
     previousTip=trail?.[Math.max(0,substep-1)].point ?? null;
     return previousTip;

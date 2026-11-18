@@ -1,6 +1,6 @@
-import {paper,plan,stroke,measure,position} from './paint.mjs?v=focus';
-import {finishPlan} from './finish.mjs?v=accents';
-import {restorePlan} from './restore.mjs';
+import {paper,plan,stroke,measure,position} from './paint.mjs?v=ink-pass';
+import {finishPlan} from './finish.mjs?v=layered';
+import {restorePlan} from './restore.mjs?v=feather';
 
 const $ = id => document.getElementById(id);
 const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,reset,status,
@@ -24,7 +24,7 @@ const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
 const restoreAt = .70;
-let limits = [0, .12, .28, .70, 1];
+let limits = [0, .20, .36, .72, 1];
 const duration = 64000;
 phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
 const formats = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
@@ -255,7 +255,7 @@ function schedule(marks,stage,tail) {
 }
 function prepare() {
   sequence=[];
-  limits=exact.checked ? [0,.12,.28,.61,restoreAt] : [0,.12,.28,.70,1];
+  limits=exact.checked ? [0,.20,.36,.62,restoreAt] : [0,.20,.36,.72,1];
   for (const [stage,marks] of plan(reference,+brush.value,+detail.value,focus).entries()) {
     sequence.push(schedule(marks,stage,sequence.at(-1)?.tail));
   }

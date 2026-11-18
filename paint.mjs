@@ -98,7 +98,7 @@ export function plan(source, brush, detail, focus) {
   const clamp = (n, max) => Math.max(0, Math.min(max - 1, n));
   const at = (x,y) => clamp(Math.round(x),w) + clamp(Math.round(y),h)*w;
 
-  function gradient(rgb) {
+  function gradient(rgb,colorEdges=false) {
     const size = w*h;
     const gray = new Float32Array(size);
     const angle = new Float32Array(size);
@@ -108,8 +108,18 @@ export function plan(source, brush, detail, focus) {
     for (let y=margin; y<h-margin; y++) {
       for (let x=margin; x<w-margin; x++) {
         const i = y*w+x;
-        const dx = gray[i-w+1]+2*gray[i+1]+gray[i+w+1]-gray[i-w-1]-2*gray[i-1]-gray[i+w-1];
-        const dy = gray[i+w-1]+2*gray[i+w]+gray[i+w+1]-gray[i-w-1]-2*gray[i-w]-gray[i-w+1];
+        let dx = gray[i-w+1]+2*gray[i+1]+gray[i+w+1]-gray[i-w-1]-2*gray[i-1]-gray[i+w-1];
+        let dy = gray[i+w-1]+2*gray[i+w]+gray[i+w+1]-gray[i-w-1]-2*gray[i-w]-gray[i-w+1];
+        if (colorEdges) {
+          for(let c=0;c<3;c++) {
+            const tl=rgb[(i-w-1)*4+c],tc=rgb[(i-w)*4+c],tr=rgb[(i-w+1)*4+c];
+            const ml=rgb[(i-1)*4+c],mr=rgb[(i+1)*4+c];
+            const bl=rgb[(i+w-1)*4+c],bc=rgb[(i+w)*4+c],br=rgb[(i+w+1)*4+c];
+            const sx=(tr+2*mr+br-tl-2*ml-bl)*.58;
+            const sy=(bl+2*bc+br-tl-2*tc-tr)*.58;
+            if(sx*sx+sy*sy>dx*dx+dy*dy) {dx=sx;dy=sy;}
+          }
+        }
         angle[i] = Math.atan2(dy,dx);
         strength[i] = Math.hypot(dx,dy);
       }
@@ -119,7 +129,7 @@ export function plan(source, brush, detail, focus) {
   function sketch({angle,strength}) {
     const edges = new Uint8Array(w*h);
     const starts = [];
-    const floor = 85 - detail*.4;
+    const floor = 74 - detail*.38;
     for (let y=1; y<h-1; y++) {
       for (let x=1; x<w-1; x++) {
         const i = y*w+x;
@@ -169,12 +179,12 @@ export function plan(source, brush, detail, focus) {
       });
       const length = path.length;
       marks.push({points, length, width:Math.max(.85,1.7*unit)*(.78+random()*.55),
-        color:'#514740', opacity:.34+random()*.38, pressure:random(), pace:.7+random()*.65});
+        color:'#302824', opacity:.61+random()*.27, pressure:random(), pace:.7+random()*.65});
     }
     marks.sort((a,b)=>b.length-a.length);
     const gestures = [];
     const distance = (a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
-    const budget=24+Math.round(detail*.53);
+    const budget=42+Math.round(detail*.56);
     const major=focus ? [...marks].map(mark=>{
       const point=[focus[0]*w,focus[1]*h];
       const center=mark.points[Math.floor(mark.points.length/2)];
@@ -184,6 +194,9 @@ export function plan(source, brush, detail, focus) {
     const selectedPoints=new Set(foreground.map(mark=>mark.points));
     const candidates=focus ? [...foreground,...marks.filter(mark=>!selectedPoints.has(mark.points)).slice(0,budget-foreground.length)] :
       marks.slice(0,budget);
+    const drawn=new Set(candidates.map(mark=>mark.points));
+    const cleanup=marks.filter(mark=>!drawn.has(mark.points) && mark.length>=Math.max(9,15*unit))
+      .slice(0,45+Math.round(detail*.65));
     const construction=major.slice(0,focus?11:17).map(mark=>({...mark,
       points:mark.points.filter((_,i)=>i%4===0).map(([x,y],i)=>[
         x+Math.sin(i*.25)*unit*1.5,y+Math.cos(i*.29)*unit*1.5]),
@@ -225,7 +238,7 @@ export function plan(source, brush, detail, focus) {
       gestures.push({...mark,lift:hand?distance(hand,first):0});
       hand = last;
     }
-    return [...construction,...gestures];
+    return [...construction,...gestures,...cleanup];
   }
 
   function flats() {
@@ -389,7 +402,7 @@ export function plan(source, brush, detail, focus) {
     return marks.sort((a,b)=>b.score-a.score);
   }
 
-  const outline = sketch(gradient(pixels(Math.max(.65,unit))));
+  const outline = sketch(gradient(pixels(Math.max(.65,unit)),true));
   const scale = brush/100*unit;
   const {marks:base,shapeAt} = flats();
   const middle = paint(Math.max(4,30*scale),Math.max(.35,.95*scale),.90,475,false);
