@@ -1,6 +1,6 @@
-import {paper,plan,stroke,measure,position} from './paint.mjs?v=ink-pass';
-import {finishPlan} from './finish.mjs?v=layered';
-import {restorePlan} from './restore.mjs?v=feather';
+import {paper,plan,stroke,measure} from './paint.mjs?v=streaks';
+import {finishPlan} from './finish.mjs?v=streaks';
+import {restorePlan} from './restore.mjs?v=streaks';
 
 const $ = id => document.getElementById(id);
 const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,reset,status,
@@ -78,40 +78,6 @@ function showFocus() {
   ctx.lineWidth=Math.max(2,radius*.16);
   ctx.strokeStyle='#f05b93';
   ctx.stroke();
-}
-function nib(point,opacity=1,mark,contact=false,heading=0) {
-  if (!point) return;
-  const scale=Math.max(.65,Math.max(canvas.width,canvas.height)/850);
-  const wide=Boolean(mark?.clip || mark?.paintColors);
-  ctx.save();
-  ctx.translate(...point);
-  ctx.rotate((wide ? -1.05 : -1.15)+Math.sin(heading)*.16);
-  ctx.scale(scale,scale);
-  ctx.globalAlpha=opacity;
-  ctx.lineCap='round';
-  ctx.lineWidth=wide?12:9;
-  ctx.strokeStyle='#292631';
-  ctx.beginPath();
-  ctx.moveTo(13,0);
-  ctx.lineTo(wide?49:41,0);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(17,-2);
-  ctx.lineTo(wide?48:40,-2);
-  ctx.lineWidth=1.5;
-  ctx.strokeStyle='#ffffff78';
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0,0);
-  ctx.quadraticCurveTo(wide?4:8,wide?-6:-3,13,wide?-5:-4);
-  ctx.lineTo(13,wide?5:4);
-  ctx.quadraticCurveTo(wide?4:8,wide?5:3,0,0);
-  ctx.fillStyle=contact && mark ? mark.color : '#ded0c2';
-  ctx.fill();
-  ctx.lineWidth=.8;
-  ctx.strokeStyle='#302932';
-  ctx.stroke();
-  ctx.restore();
 }
 async function load(image) {
   if (!image || exporting) return;
@@ -265,11 +231,10 @@ function schedule(marks,stage,tail) {
     const length=measure(mark);
     const from=tail;
     const gap=from?Math.hypot(mark.points[0][0]-from[0],mark.points[0][1]-from[1]):0;
-    const depart=end;
     const begin=end+Math.min(20,Math.sqrt(gap)*.83);
     end=begin+(5+Math.sqrt(length)*(stage===0?3:1))*(mark.pace || 1);
     tail=mark.points.at(-1);
-    return {begin,end,depart,from,gap};
+    return {begin,end};
   });
   return {marks,timing,end,tail};
 }
@@ -283,7 +248,7 @@ function prepare() {
 }
 function render(fraction) {
   if (restoration) {
-    nib(restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt))),.7);
+    restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt)));
     updateProgress(fraction);
     return;
   }
@@ -302,37 +267,21 @@ function render(fraction) {
   if (exact.checked && fraction>=restoreAt) {
     const [x,y]=sequence[phase].tail || [reference.width*.5,reference.height*.5];
     restoration=restorePlan(ctx,original,[x*canvas.width/reference.width,y*canvas.height/reference.height]);
-    nib(restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt))),.7);
+    restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt)));
     updateProgress(fraction);
     return;
   }
   const scaleX=canvas.width/reference.width, scaleY=canvas.height/reference.height;
   if (index<marks.length) {
-    const {begin,end: stop,depart,from,gap} = timing[index];
+    const {begin,end: stop} = timing[index];
     const t = Math.max(0,(value-begin)/(stop-begin));
     const eased = t*t*t*(10+t*(-15+6*t));
-    const points=marks[index].points;
-    const along=position(marks[index],eased);
-    const a=points[Math.floor(along)], b=points[Math.ceil(along)];
-    const u=along-Math.floor(along);
-    const tip=[(a[0]+(b[0]-a[0])*u)*scaleX,(a[1]+(b[1]-a[1])*u)*scaleY];
-    let opacity=1;
     if (eased>0) {
       ctx.save();
       ctx.scale(scaleX,scaleY);
       stroke(ctx,marks[index],eased);
       ctx.restore();
-    } else if (value<begin && from && begin>depart) {
-      const t=(value-depart)/(begin-depart);
-      const lift=t*t*(3-2*t);
-      tip[0]=from[0]*scaleX+(tip[0]-from[0]*scaleX)*lift;
-      tip[1]=from[1]*scaleY+(tip[1]-from[1]*scaleY)*lift;
-      if (gap>Math.max(reference.width,reference.height)*.14) opacity=1-.7*Math.sin(Math.PI*t);
     }
-    const trailing=points[Math.max(0,Math.floor(along)-1)];
-    const leading=points[Math.min(points.length-1,Math.ceil(along)+1)];
-    const heading=Math.atan2(leading[1]-trailing[1],leading[0]-trailing[0]);
-    nib(tip,eased>0?opacity:opacity*.70,marks[index],eased>0,heading);
   }
   phases.forEach((item,i)=>item.classList.toggle('active',i===Math.min(2,phase)));
   updateProgress(fraction);

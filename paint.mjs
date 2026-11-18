@@ -325,14 +325,14 @@ export function plan(source, brush, detail, focus) {
           const a=cells[start], b=cells[i-1];
           const length=Math.abs(a.along-b.along);
           if (i-start<3 && region.length>20) continue;
+          if (length<step*1.4) continue;
           const bend=(random()-.5)*Math.min(width*.65,length*.24);
-          const points=length<=step?[[a.x,a.y],[a.x+dx*step*.55,a.y+dy*step*.55]]:
-            Array.from({length:7},(_,j)=>{
+          const points=Array.from({length:7},(_,j)=>{
               const t=j/6, along=a.along+(b.along-a.along)*t;
               const across=a.across+(b.across-a.across)*t+offset(along)+Math.sin(Math.PI*t)*bend;
               return [along*dx-across*dy,along*dy+across*dx];
             });
-          result.push({clip:fill,points,width:width*(.93+random()*.14),color,
+          result.push({clip:fill,points,width:Math.min(length*.74,width*(.93+random()*.14)),color,
             opacity:.68+random()*.16,pace:.8+random()*.38,pressure:.35,
             shape,mass:region.length>=seen.length*.013});
         }
@@ -386,6 +386,8 @@ export function plan(source, brush, detail, focus) {
           return points;
         }
         const points = [...half(-1).reverse(),[px,py],...half(1)];
+        if(points.length<3) continue;
+        const paintedWidth=Math.min(width,(points.length-1)*step*.66);
         const color = 'rgb('+rgb.slice(rgbIndex,rgbIndex+3).join(',')+')';
         const paintColors=!fine && points.length>2 ? [0,.33,.66,1].map(t=>{
           const [x,y]=points[Math.round(t*(points.length-1))];
@@ -394,7 +396,7 @@ export function plan(source, brush, detail, focus) {
           return 'rgb('+[0,1,2].map(k=>Math.round(samples.reduce((sum,p)=>sum+rgb[4*p+k],0)/5)).join(',')+')';
         }) : null;
         const group = Math.floor(px/(spacing*5)) + Math.floor(py/(spacing*5))*Math.ceil(w/(spacing*5));
-        marks.push({points,width,color,paintColors,opacity:opacity*(.82+random()*.18),
+        marks.push({points,width:paintedWidth,color,paintColors,opacity:opacity*(.82+random()*.18),
           center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],pressure:.52,
           score:Math.sin(group*192.27)*.44 + random()*.47 + (fine?strength[i]/1500:0)});
       }

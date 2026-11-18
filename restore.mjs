@@ -86,7 +86,7 @@ export function restorePlan(ctx, original, previous) {
       for (let j=0;j<steps;j++) {
         const cells=[];
         collect(px,py,cells,radius);
-        trail.push({cells,point:[(px+.5)*width/cols,(py+.5)*height/rows]});
+        trail.push(cells);
         const turn=tangent(px,py)-heading;
         heading+=.19*Math.atan2(Math.sin(2*turn),Math.cos(2*turn))+bend*.18;
         const nx=px+Math.cos(heading)*1.65, ny=py+Math.sin(heading)*1.65;
@@ -98,7 +98,7 @@ export function restorePlan(ctx, original, previous) {
     }
   }
 
-  let operation=0, substep=0, previousTip;
+  let operation=0, substep=0;
   const initial=target.data.slice();
   const fading=[];
   const settle=Math.max(1,operations.length*.038);
@@ -112,12 +112,7 @@ export function restorePlan(ctx, original, previous) {
     }
     function queue(trail,index) {
       const hit=operation+index/trail.length;
-      for (const cell of trail[index].cells) fading.push({cell,hit});
-    }
-    if (previousTip) {
-      const [x,y]=previousTip;
-      dirty(Math.max(0,Math.floor(x-13)),Math.max(0,Math.floor(y-13)),
-        Math.min(width,Math.ceil(x+13)),Math.min(height,Math.ceil(y+13)));
+      for (const cell of trail[index]) fading.push({cell,hit});
     }
     for (;operation<end;operation++,substep=0) {
       const trail=operations[operation];
@@ -145,7 +140,5 @@ export function restorePlan(ctx, original, previous) {
     }
     fading.length=active;
     if (right>left && bottom>top) ctx.putImageData(target,0,0,left,top,right-left,bottom-top);
-    previousTip=trail?.[Math.max(0,substep-1)].point ?? null;
-    return previousTip;
   };
 }

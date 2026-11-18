@@ -46,7 +46,7 @@ export function finishPlan(ctx, reference, detail) {
     if(marks.length>=cap) break;
     if(marks.some(mark=>{const [px,py]=centerOf(mark);return Math.hypot(px-x,py-y)<stride*.75;})) continue;
     const angle=Math.atan2(gy,gx)+Math.PI/2;
-    const length=stride*(.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
+    const length=stride*(dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
     const dx=Math.cos(angle)*length, dy=Math.sin(angle)*length;
     const normal=Math.max(1,Math.hypot(gx,gy));
     const shift=dot?0:highlight?.8:-1;
@@ -57,9 +57,9 @@ export function finishPlan(ctx, reference, detail) {
       const p=at(cx+Math.cos(angle)*j,cy+Math.sin(angle)*j);
       for(let k=0;k<3;k++) channels[k]+=source[p+k];
     }
-    marks.push({points:dot?[[x,y]]:[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]],
+    marks.push({points:[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]],
       color:'rgb('+channels.map(c=>Math.round(c/(2*sampleCount+1))).join(',')+')',
-      width:Math.max(.9,stride*(dot?.16:.18)),opacity:Math.min(highlight?.86:.70,.36+score/225),pressure:.52});
+      width:Math.max(.72,stride*(dot?.09:.18)),opacity:Math.min(highlight?.86:.70,.36+score/225),pressure:.52});
   }
   const ordered=[];
   let tip=marks[0]?.points[0];
