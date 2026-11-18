@@ -10,6 +10,8 @@ const download = $('export');
 const savePng = $('save-png');
 const demo = $('demo');
 const demoVideos = [...demo.querySelectorAll('video')];
+const pausedDemos = new Set();
+let demoVisible=false;
 const demoFold = $('demo-fold');
 const chooseUpload = $('choose-upload');
 const upload = $('upload');
@@ -172,14 +174,20 @@ for (const video of demoVideos) {
   video.addEventListener('pause',sync);
   video.addEventListener('ended',sync);
   button.addEventListener('click',()=>{
-    if (!video.paused) video.pause();
-    else {
-      for (const other of demoVideos) if(other!==video) other.pause();
-      video.play().catch(sync);
-    }
+    if (!video.paused) pausedDemos.add(video);
+    else pausedDemos.delete(video);
+    updateDemoPlayback();
   });
 }
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
+if (reduceMotion.matches) for (const video of demoVideos) pausedDemos.add(video);
+function updateDemoPlayback() {
+  const visible=demoVisible && !demo.classList.contains('is-collapsed') && !document.hidden;
+  for(const video of demoVideos) {
+    if(visible && !pausedDemos.has(video)) video.play().catch(()=>{});
+    else video.pause();
+  }
+}
 let scrollFrame=0;
 // Match the pinned showcase transition used on EdiTool.
 function paintShowcase() {
@@ -204,12 +212,14 @@ demoFold.addEventListener('click',()=>{
   const collapsed=demo.classList.toggle('is-collapsed');
   demoFold.setAttribute('aria-expanded',String(!collapsed));
   demoFold.textContent=collapsed?'Развернуть видео':'Свернуть видео';
-  if(collapsed) for(const video of demoVideos) video.pause();
+  updateDemoPlayback();
   scheduleShowcase();
 });
 new IntersectionObserver(([entry])=>{
-  if(!entry.isIntersecting) for(const video of demoVideos) video.pause();
+  demoVisible=entry.isIntersecting;
+  updateDemoPlayback();
 }).observe(demo);
+document.addEventListener('visibilitychange',updateDemoPlayback);
 scheduleShowcase();
 for(const zone of [surface,drop]) {
   zone.addEventListener('dragover',event=>{
