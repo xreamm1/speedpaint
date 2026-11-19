@@ -1,4 +1,4 @@
-import {paper,stroke,measure} from './paint.mjs?v=coverage';
+import {paper,stroke,measure} from './paint.mjs?v=portrait';
 import {restorePlan} from './restore.mjs?v=continuous';
 
 const $ = id => document.getElementById(id);
@@ -8,6 +8,7 @@ const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,
 const download = $('export');
 const savePng = $('save-png');
 const exact = $('exact');
+const quality = $('quality');
 const demo = $('demo');
 const demoVideos = [...demo.querySelectorAll('video')];
 const pausedDemos = new Set();
@@ -57,7 +58,7 @@ function controls() {
   canvas.classList.toggle('can-pick',ready && !busy && !running && time===0);
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
-  exact.disabled = busy || running || time>0 && !complete;
+  quality.disabled = exact.disabled = busy || running || time>0 && !complete;
   start.textContent = running && !exporting ? 'Пауза' : complete ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
   start.classList.toggle('primary',!complete && !exporting);
 }
@@ -270,13 +271,14 @@ function updatePngLabel() {
   const size = exact.checked ? [original.naturalWidth,original.naturalHeight] : [canvas.width,canvas.height];
   savePng.textContent = (exact.checked ? 'Оригинал в PNG' : 'Рисунок в PNG') + ' · ' + size.join(' × ');
 }
+quality.addEventListener('change',()=>{if(time) reset.click();});
 exact.addEventListener('change',()=>{
   if (!ready) return;
   if (time) reset.click();
   updatePngLabel();
 });
 async function buildPainting() {
-  const settings = [+brush.value,+detail.value,focus,exact.checked];
+  const settings = [+brush.value,+detail.value,focus,exact.checked,quality.checked];
   const key = JSON.stringify(settings);
   if (prepared?.key===key) return;
   loading = true;
@@ -288,7 +290,7 @@ async function buildPainting() {
   teto.play().catch(()=>{});
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=coverage',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=portrait',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
@@ -300,7 +302,7 @@ async function buildPainting() {
           processingProgress.value = data.value;
         }
       };
-      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3]},[bitmap]);
+      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3],quality:settings[4]},[bitmap]);
     });
     prepared = {key,...result};
     processingStep.textContent = 'Подготовка завершена';

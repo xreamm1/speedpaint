@@ -1,5 +1,5 @@
 // Use the remaining error to place accents. Each mark mixes a local pigment.
-export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus) {
+export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus, zone) {
   const {regions,labels,cols,step} = areas;
   const {width,height}=reference;
   let sample=ctx;
@@ -16,13 +16,15 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus)
   const at=(x,y)=>4*(Math.max(0,Math.min(width-1,Math.round(x)))+
     width*Math.max(0,Math.min(height-1,Math.round(y))));
   const luma=i=>.30*source[i]+.59*source[i+1]+.11*source[i+2];
-  const stride=Math.max(4,Math.round(Math.max(width,height)/63));
+  const stride=Math.max(4,Math.round(Math.max(width,height)/(zone && mode!=='hair' ? 155 : 63)));
+  const [zx,zy,rx,ry] = zone || [0,0,1,1];
   const candidates=[];
   for(let top=0;top<height;top+=stride) {
     for(let left=0;left<width;left+=stride) {
       let pick;
       for(let y=top+1;y<Math.min(top+stride,height-1);y+=2) {
         for(let x=left+1;x<Math.min(left+stride,width-1);x+=2) {
+          if (zone && ((x-zx)/rx)**2+((y-zy)/ry)**2>1) continue;
           const i=at(x,y);
           const error=(Math.abs(source[i]-actual[i])+Math.abs(source[i+1]-actual[i+1])+
             Math.abs(source[i+2]-actual[i+2]))/3;
@@ -35,7 +37,7 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus)
           const actualLight=.30*actual[i]+.59*actual[i+1]+.11*actual[i+2];
           if (mode==='edge' && (edge<16 || light>=actualLight)) continue;
           if (mode==='shadow' && (dot || edge>=32 || light>=actualLight || error<13)) continue;
-          if (mode==='light' && (dot || light<=actualLight)) continue;
+          if ((mode==='light' || mode==='hair') && (dot || light<=actualLight)) continue;
           if (mode==='texture' && !dot && !highlight) continue;
           const score=error*Math.min(1,Math.max(mode==='shadow'?.65:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
           if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight,broad:mode==='shadow'};
@@ -55,7 +57,7 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus)
     if(marks.length>=cap) break;
     if(marks.some(mark=>{const [px,py]=centerOf(mark);return Math.hypot(px-x,py-y)<stride*.75;})) continue;
     const angle=broad ? -.55+.35*Math.sin(x*.039+y*.026) : Math.atan2(gy,gx)+Math.PI/2;
-    const length=stride*(broad?1.10:dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
+    const length=stride*(mode==='hair'?1.85:broad?1.10:dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
     const dx=Math.cos(angle)*length, dy=Math.sin(angle)*length;
     const normal=Math.max(1,Math.hypot(gx,gy));
     const shift=dot?0:highlight?.8:-1;
@@ -66,7 +68,29 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus)
       const p=at(cx+Math.cos(angle)*j,cy+Math.sin(angle)*j);
       for(let k=0;k<3;k++) channels[k]+=source[p+k];
     }
-    marks.push({area,clip:regions[area-1]?.clip,points:[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]],
+    let points=[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]];
+    if (mode==='hair') {
+      function follow(direction) {
+        let px=x, py=y, heading=angle+(direction<0 ? Math.PI : 0);
+        const trail=[];
+        for (let i=0;i<5;i++) {
+          const sx=luma(at(px+2,py))-luma(at(px-2,py));
+          const sy=luma(at(px,py+2))-luma(at(px,py-2));
+          if (Math.hypot(sx,sy)>9) {
+            const turn=Math.atan2(sy,sx)+Math.PI/2-heading;
+            heading+=.27*Math.atan2(Math.sin(2*turn),Math.cos(2*turn));
+          }
+          px+=Math.cos(heading)*length/5;
+          py+=Math.sin(heading)*length/5;
+          if (px<0 || py<0 || px>=width || py>=height) break;
+          trail.push([px,py]);
+        }
+        return trail;
+      }
+      points=[...follow(-1).reverse(),[x,y],...follow(1)];
+      if (points.length<2) continue;
+    }
+    marks.push({area,zone,clip:regions[area-1]?.clip,points,
       color:'rgb('+channels.map(c=>Math.round(c/(2*sampleCount+1))).join(',')+')',
       width:Math.max(.72,stride*(broad?.52:dot?.09:.18)),opacity:Math.min(highlight?.86:.70,.36+score/225),pressure:.52});
   }

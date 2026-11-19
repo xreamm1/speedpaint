@@ -476,8 +476,13 @@ export function position(mark, fraction) {
 }
 
 export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
+  if (mark.clip || mark.zone) ctx.save();
+  if (mark.zone) {
+    ctx.beginPath();
+    ctx.ellipse(...mark.zone,0,0,Math.PI*2);
+    ctx.clip();
+  }
   if (mark.clip) {
-    ctx.save();
     if (!clipPaths.has(mark.clip)) clipPaths.set(mark.clip,new Path2D(mark.clip.path));
     ctx.clip(clipPaths.get(mark.clip),'evenodd');
   }
@@ -535,5 +540,5 @@ export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  if (mark.clip) ctx.restore();
+  if (mark.clip || mark.zone) ctx.restore();
 }
