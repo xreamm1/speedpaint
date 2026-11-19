@@ -247,6 +247,16 @@ export function plan(source, brush, detail, focus, report = () => {}) {
     const rgb = pixels(Math.max(.4,step*.42));
     const seen = new Uint8Array(cols*rows);
     const colorAt = i=>at((i%cols+.5)*step,(Math.floor(i/cols)+.5)*step)*4;
+    const dark = Uint8Array.from(seen,(_,cell)=>{
+      const i=colorAt(cell);
+      return .30*rgb[i]+.59*rgb[i+1]+.11*rgb[i+2]<65;
+    });
+    const barrier = dark.map((value,i)=>{
+      const x=i%cols;
+      if (value) return 1;
+      return Number((x>0 && x<cols-1 && dark[i-1] && dark[i+1]) ||
+        (dark[i-cols] && dark[i+cols]) || false);
+    });
     const fills = [];
     for (let seed=0;seed<seen.length;seed++) {
       if (seen[seed]) continue;
@@ -262,7 +272,7 @@ export function plan(source, brush, detail, focus, report = () => {}) {
         minX=Math.min(minX,x);maxX=Math.max(maxX,x);
         minY=Math.min(minY,y);maxY=Math.max(maxY,y);
         for (const next of [x>0?cell-1:-1,x<cols-1?cell+1:-1,y>0?cell-cols:-1,y<rows-1?cell+cols:-1]) {
-          if (next<0 || seen[next]) continue;
+          if (next<0 || seen[next] || barrier[next]!==barrier[cell]) continue;
           const n=colorAt(next);
           const delta=Math.abs(rgb[n]-rgb[c])+Math.abs(rgb[n+1]-rgb[c+1])+Math.abs(rgb[n+2]-rgb[c+2]);
           if (delta>46) continue;
@@ -294,9 +304,18 @@ export function plan(source, brush, detail, focus, report = () => {}) {
       }
       return shape;
     }
-    const marks=regions.flatMap(({region,point,pigment,background,roundness})=>{
-      const fill=smoothMask(region,cols,step);
-      const color='rgb('+pigment.join(',')+')';
+    if (focus) {
+      const [fx,fy]=[focus[0]*w,focus[1]*h];
+      const priority=area=>Math.hypot(area.point[0]-fx,area.point[1]-fy)+(area.background?w:0);
+      regions.sort((a,b)=>priority(a)-priority(b));
+    }
+    const labels = new Uint16Array(seen.length);
+    for (const [i,area] of regions.entries()) {
+      area.clip=smoothMask(area.region,cols,step);
+      area.color='rgb('+area.pigment.join(',')+')';
+      for (const cell of area.region) labels[cell]=i+1;
+    }
+    const marks=regions.flatMap(({region,point,pigment,background,roundness,clip:fill,color})=>{
       const shape=shapeAt(...point,pigment);
       const width=Math.max(step*2.2,Math.min(52*unit,Math.sqrt(region.length)*step*.38))*brush/100;
       const lane=Math.max(step,width*.88);
@@ -340,7 +359,7 @@ export function plan(source, brush, detail, focus, report = () => {}) {
       }
       return result;
     });
-    return {marks,shapeAt};
+    return {marks,shapeAt,regions,labels,cols,step};
   }
 
   function paint(size, blur, opacity, budget, fine) {
@@ -408,14 +427,14 @@ export function plan(source, brush, detail, focus, report = () => {}) {
   const outline = sketch(gradient(pixels(Math.max(.65,unit)),true));
   const scale = brush/100*unit;
   report('Подбираю крупные цветовые пятна',34);
-  const {marks:base,shapeAt} = flats();
+  const {marks:base,shapeAt,...areas} = flats();
   report('Прокладываю траектории кисти',55);
   const middle = paint(Math.max(4,30*scale),Math.max(.35,.95*scale),.90,475,false);
   const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*.95,true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
   const byShape=(a,b)=>a.shape-b.shape;
-  const foundation=base.filter(mark=>mark.mass);
-  const colorStudies=base.filter(mark=>!mark.mass).sort(byShape);
+  const foundation=focus ? base : base.filter(mark=>mark.mass);
+  const colorStudies=focus ? [] : base.filter(mark=>!mark.mass).sort(byShape);
   const tones=[], edges=[];
   for (const [pass,marks] of [middle,fine].entries()) {
     for (const mark of marks) {
@@ -429,7 +448,7 @@ export function plan(source, brush, detail, focus, report = () => {}) {
   const row=mark=>Math.floor(mark.center[1]/(34*unit));
   const local=(a,b)=>byShape(a,b)||a.tone-b.tone||a.pass-b.pass||
     row(a)-row(b)||(row(a)%2 ? b.center[0]-a.center[0] : a.center[0]-b.center[0]);
-  return [outline,[...foundation,...colorStudies],[...tones.sort(local),...edges.sort(local),...accents]];
+  return {areas,stages:[outline,[...foundation,...colorStudies],[...tones.sort(local),...edges.sort(local),...accents]]};
 }
 
 export function measure(mark) {

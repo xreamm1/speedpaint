@@ -1,6 +1,6 @@
 // Use the remaining error to place accents. Each mark mixes a local pigment.
-export function finishPlan(ctx, reference, detail, mode) {
-  const fillGaps = mode==='base';
+export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus) {
+  const {regions,labels,cols,step} = areas;
   const {width,height}=reference;
   let sample=ctx;
   if(ctx.canvas.width!==width || ctx.canvas.height!==height) {
@@ -34,20 +34,24 @@ export function finishPlan(ctx, reference, detail, mode) {
           const highlight=light>190 && light>(.30*actual[i]+.59*actual[i+1]+.11*actual[i+2])+14;
           const actualLight=.30*actual[i]+.59*actual[i+1]+.11*actual[i+2];
           if (mode==='edge' && (edge<16 || light>=actualLight)) continue;
+          if (mode==='shadow' && (dot || edge>=32 || light>=actualLight || error<13)) continue;
           if (mode==='light' && (dot || light<=actualLight)) continue;
           if (mode==='texture' && !dot && !highlight) continue;
-          const score=error*Math.min(1,Math.max(fillGaps?.78:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
-          if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight,broad:fillGaps && edge<16 && Math.abs(center)<12};
+          const score=error*Math.min(1,Math.max(mode==='shadow'?.65:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
+          if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight,broad:mode==='shadow'};
         }
       }
       if(pick) candidates.push(pick);
     }
   }
-  candidates.sort((a,b)=>b.score-a.score);
+  for (const pick of candidates) {
+    pick.area=labels[Math.floor(pick.y/step)*cols+Math.floor(pick.x/step)];
+  }
+  candidates.sort((a,b)=>(prioritizeFocus ? Number(b.area===1)-Number(a.area===1) : 0) || b.score-a.score);
   const marks=[];
-  const cap=(fillGaps?76:48)+Math.round(detail*1.15);
+  const cap=64+Math.round(detail*1.15);
   const centerOf=({points})=>points[Math.floor(points.length/2)];
-  for(const {x,y,gx,gy,score,dot,highlight,broad} of candidates) {
+  for(const {x,y,gx,gy,score,dot,highlight,broad,area} of candidates) {
     if(marks.length>=cap) break;
     if(marks.some(mark=>{const [px,py]=centerOf(mark);return Math.hypot(px-x,py-y)<stride*.75;})) continue;
     const angle=broad ? -.55+.35*Math.sin(x*.039+y*.026) : Math.atan2(gy,gx)+Math.PI/2;
@@ -62,7 +66,7 @@ export function finishPlan(ctx, reference, detail, mode) {
       const p=at(cx+Math.cos(angle)*j,cy+Math.sin(angle)*j);
       for(let k=0;k<3;k++) channels[k]+=source[p+k];
     }
-    marks.push({points:[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]],
+    marks.push({area,clip:regions[area-1]?.clip,points:[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]],
       color:'rgb('+channels.map(c=>Math.round(c/(2*sampleCount+1))).join(',')+')',
       width:Math.max(.72,stride*(broad?.52:dot?.09:.18)),opacity:Math.min(highlight?.86:.70,.36+score/225),pressure:.52});
   }

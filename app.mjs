@@ -1,4 +1,4 @@
-import {paper,plan,stroke,measure} from './paint.mjs?v=preflight';
+import {paper,stroke,measure} from './paint.mjs?v=coverage';
 import {restorePlan} from './restore.mjs?v=continuous';
 
 const $ = id => document.getElementById(id);
@@ -288,7 +288,7 @@ async function buildPainting() {
   teto.play().catch(()=>{});
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=brush-final',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=coverage',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
