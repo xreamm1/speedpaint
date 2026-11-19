@@ -491,7 +491,7 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
         }) : null;
         const group = Math.floor(px/(spacing*5)) + Math.floor(py/(spacing*5))*Math.ceil(w/(spacing*5));
         marks.push({points,width:paintedWidth,color,paintColors,opacity:opacity*(.82+random()*.18),
-          soft:photographic && !fine,center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],pressure:.52,
+          soft:photographic && !fine && strength[i]<44,center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],pressure:.52,
           score:Math.sin(group*192.27)*.44 + random()*.47 + (fine?strength[i]/1500:0)});
       }
     }

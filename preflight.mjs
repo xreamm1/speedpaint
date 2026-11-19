@@ -1,6 +1,6 @@
 import {classify,typeNames} from './classify.mjs?v=adaptive';
-import {paper,plan,stroke} from './paint.mjs?v=portrait-flow';
-import {finishPlan} from './finish.mjs?v=portrait-flow';
+import {paper,plan,stroke} from './paint.mjs?v=portrait-edges';
+import {finishPlan} from './finish.mjs?v=portrait-edges';
 
 import {correctionPaths} from './restore.mjs?v=continuous';
 
