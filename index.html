@@ -7,7 +7,7 @@
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css?v=continuous">
-<script type="module" src="./app.mjs?v=continuous"></script>
+<script type="module" src="./app.mjs?v=brush-final"></script>
 </head>
 <body>
 <header>
@@ -72,7 +72,7 @@
 </div>
 <div id="downloads" hidden>
 <button id="export" class="primary" disabled>Скачать видео</button>
-<button id="save-png" disabled>Оригинал в PNG</button>
+<button id="save-png" disabled>Рисунок в PNG</button>
 </div>
 </div>
 <p id="status" role="status"></p>
@@ -84,6 +84,7 @@
 <label class="setting" for="detail">Детализация <output for="detail">65%</output></label>
 <input id="detail" type="range" min="0" max="100" step="5" value="65">
 
+<label class="mode"><input id="exact" type="checkbox"> Проявить оригинал</label>
 <p class="setting-hint">До старта нажмите на главный объект, чтобы начать набросок с него.</p>
 </aside>
 </div>

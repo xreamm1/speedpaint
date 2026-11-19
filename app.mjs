@@ -7,6 +7,7 @@ const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,
   Object.fromEntries('canvas file surface drop source filename dimensions progress speed brush detail start reset status replace choose playback downloads clock'.split(' ').map(id=>[id,$(id)]));
 const download = $('export');
 const savePng = $('save-png');
+const exact = $('exact');
 const demo = $('demo');
 const demoVideos = [...demo.querySelectorAll('video')];
 const pausedDemos = new Set();
@@ -29,7 +30,7 @@ const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
 const restoreAt = .88;
-const limits = [0,.20,.36,.62,restoreAt];
+let limits = [0,.20,.36,.62,restoreAt];
 const duration = 64000;
 phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
 const formats = ['video/webm;codecs=vp8','video/mp4','video/webm'];
@@ -56,6 +57,7 @@ function controls() {
   canvas.classList.toggle('can-pick',ready && !busy && !running && time===0);
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
+  exact.disabled = busy || running || time>0 && !complete;
   start.textContent = running && !exporting ? 'Пауза' : complete ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
   start.classList.toggle('primary',!complete && !exporting);
 }
@@ -139,7 +141,7 @@ async function load(image) {
     document.querySelector('main').append(demo);
     for (const video of demoVideos) video.pause();
     if (mime) download.textContent = 'Скачать ' + (mime.includes('mp4') ? 'MP4' : 'WebM') + ' · ' + videoSize().join(' × ');
-    savePng.textContent = 'Оригинал в PNG · ' + picture.naturalWidth + ' × ' + picture.naturalHeight;
+    updatePngLabel();
     dimensions.textContent = picture.naturalWidth+' × '+picture.naturalHeight+' px';
     ready = true;
     focus = null;
@@ -264,8 +266,17 @@ function schedule(marks,stage,tail) {
   });
   return {marks,timing,end,tail};
 }
+function updatePngLabel() {
+  const size = exact.checked ? [original.naturalWidth,original.naturalHeight] : [canvas.width,canvas.height];
+  savePng.textContent = (exact.checked ? 'Оригинал в PNG' : 'Рисунок в PNG') + ' · ' + size.join(' × ');
+}
+exact.addEventListener('change',()=>{
+  if (!ready) return;
+  if (time) reset.click();
+  updatePngLabel();
+});
 async function buildPainting() {
-  const settings = [+brush.value,+detail.value,focus];
+  const settings = [+brush.value,+detail.value,focus,exact.checked];
   const key = JSON.stringify(settings);
   if (prepared?.key===key) return;
   loading = true;
@@ -277,7 +288,7 @@ async function buildPainting() {
   teto.play().catch(()=>{});
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=continuous',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=brush-final',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
@@ -289,7 +300,7 @@ async function buildPainting() {
           processingProgress.value = data.value;
         }
       };
-      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2]},[bitmap]);
+      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3]},[bitmap]);
     });
     prepared = {key,...result};
     processingStep.textContent = 'Подготовка завершена';
@@ -304,6 +315,8 @@ async function buildPainting() {
   }
 }
 function prepare() {
+  limits = [0,.20,.40,.63,exact.checked ? restoreAt : 1];
+  phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
   sequence=[];
   for (const [stage,marks] of prepared.stages.entries()) {
     sequence.push(schedule(marks,stage,sequence.at(-1)?.tail));
@@ -327,7 +340,7 @@ function render(fraction) {
   const value = end*(Math.min(fraction,stopAt)-limits[phase])/(stopAt-limits[phase]);
   while (index<marks.length && (timing[index].end<=value+1e-7 || fraction>=stopAt)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0);
-  if (fraction>=restoreAt) {
+  if (exact.checked && fraction>=restoreAt) {
     restoration=restorePlan(ctx,original,prepared.corrections);
     restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt)));
     updateProgress(fraction);
@@ -373,7 +386,7 @@ function play(rate, done) {
     }
     previous = now;
     render(time/duration);
-    if (time>=duration) {
+    if (exact.checked && time>=duration) {
       ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.drawImage(original,0,0,canvas.width,canvas.height);
       if (!exporting) {
@@ -435,6 +448,13 @@ function save(blob, name) {
 }
 savePng.addEventListener('click',()=>{
   const name = photoName+'-final.png';
+  if (!exact.checked) {
+    canvas.toBlob(blob=>{
+      if (blob) save(blob,name);
+      else status.textContent = 'Не удалось сохранить PNG.';
+    },'image/png');
+    return;
+  }
   const native = document.createElement('canvas');
   native.width = original.naturalWidth;
   native.height = original.naturalHeight;
@@ -459,7 +479,7 @@ download.addEventListener('click',()=>{
     stream?.getTracks().forEach(track=>track.stop());
     videoCanvas.width = videoCanvas.height = 1;
     running = exporting = false;
-    if (time>=duration) {
+    if (exact.checked && time>=duration) {
       original.hidden = false;
       canvas.style.visibility = 'hidden';
     }

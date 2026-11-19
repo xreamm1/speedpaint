@@ -1,5 +1,6 @@
 // Use the remaining error to place accents. Each mark mixes a local pigment.
-export function finishPlan(ctx, reference, detail, fillGaps = false) {
+export function finishPlan(ctx, reference, detail, mode) {
+  const fillGaps = mode==='base';
   const {width,height}=reference;
   let sample=ctx;
   if(ctx.canvas.width!==width || ctx.canvas.height!==height) {
@@ -31,6 +32,10 @@ export function finishPlan(ctx, reference, detail, fillGaps = false) {
           const edge=Math.hypot(gx,gy);
           const dot=Math.abs(center)>26 && edge<Math.abs(center)*1.8;
           const highlight=light>190 && light>(.30*actual[i]+.59*actual[i+1]+.11*actual[i+2])+14;
+          const actualLight=.30*actual[i]+.59*actual[i+1]+.11*actual[i+2];
+          if (mode==='edge' && (edge<16 || light>=actualLight)) continue;
+          if (mode==='light' && (dot || light<=actualLight)) continue;
+          if (mode==='texture' && !dot && !highlight) continue;
           const score=error*Math.min(1,Math.max(fillGaps?.78:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
           if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight,broad:fillGaps && edge<16 && Math.abs(center)<12};
         }
