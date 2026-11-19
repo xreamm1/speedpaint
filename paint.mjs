@@ -424,6 +424,9 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
     return {marks,shapeAt,regions,labels,cols,step};
   }
 
+  const photographic=type==='photo' || type==='portrait';
+  const largeFlow=photographic ? gradient(pixels(Math.max(3,unit*7))) : null;
+
   function paint(size, blur, opacity, budget, fine) {
     const rgb = pixels(blur);
     const {angle,strength} = gradient(rgb);
@@ -448,7 +451,15 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
         const bend = (random()-.5)*.55;
         const steps = fine ? 5+Math.floor(random()*6) : 8+Math.floor(random()*7);
         const step = Math.max(.6,width*.23);
-        const direction = index => strength[index]>22 ? angle[index]+Math.PI/2+bend : -.55+bend;
+        function direction(index) {
+          if (strength[index]>22) return angle[index]+Math.PI/2+bend;
+          if (largeFlow && largeFlow.strength[index]>7) return largeFlow.angle[index]+Math.PI/2+bend*.4;
+          if (photographic) {
+            const x=index%w, y=Math.floor(index/w);
+            return .72*Math.sin(x*3.8/w)+.85*Math.cos(y*5.2/h)+bend;
+          }
+          return -.55+bend;
+        }
         const rgbIndex = i*4;
         const colorDistance = index => Math.abs(rgb[index*4]-rgb[rgbIndex])+
           Math.abs(rgb[index*4+1]-rgb[rgbIndex+1])+Math.abs(rgb[index*4+2]-rgb[rgbIndex+2]);
@@ -480,7 +491,7 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
         }) : null;
         const group = Math.floor(px/(spacing*5)) + Math.floor(py/(spacing*5))*Math.ceil(w/(spacing*5));
         marks.push({points,width:paintedWidth,color,paintColors,opacity:opacity*(.82+random()*.18),
-          center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],pressure:.52,
+          soft:photographic && !fine,center:[px,py],pigment:[rgb[rgbIndex],rgb[rgbIndex+1],rgb[rgbIndex+2]],edge:strength[i],pressure:.52,
           score:Math.sin(group*192.27)*.44 + random()*.47 + (fine?strength[i]/1500:0)});
       }
     }
@@ -513,8 +524,8 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
   report('Подбираю крупные цветовые пятна',34);
   const {marks:base,shapeAt,...areas} = flats();
   report('Прокладываю траектории кисти',55);
-  const middle = paint(Math.max(4,(type==='photo'||type==='portrait'?38:30)*scale),Math.max(.35,.95*scale),.90,type==='portrait'?850:475,false);
-  const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*(type==='portrait'?4.5:.95),true);
+  const middle = paint(Math.max(4,(photographic?29:30)*scale),Math.max(.35,.95*scale),photographic?.79:.90,photographic?900:475,false);
+  const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*(type==='portrait'?4.5:photographic?2.6:.95),true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
   const byShape=(a,b)=>a.shape-b.shape;
   const foundation=focus ? base : base.filter(mark=>mark.mass);
@@ -588,7 +599,19 @@ export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
   ctx.fillStyle = ctx.strokeStyle = pigment;
   ctx.lineCap = ctx.lineJoin = 'round';
   ctx.beginPath();
-  if (mark.pressure!==undefined && points.length>1) {
+  if (mark.soft) {
+    ctx.moveTo(...points[0]);
+    for (let i=1;i<=Math.ceil(distance);i++) {
+      const t=Math.min(1,distance-i+1);
+      const [x,y]=points[i-1];
+      ctx.lineTo(x+(points[i][0]-x)*t,y+(points[i][1]-y)*t);
+    }
+    ctx.globalAlpha=opacity*opacityScale*.28;
+    ctx.stroke();
+    ctx.lineWidth=width*.62;
+    ctx.globalAlpha=opacity*opacityScale*.63;
+    ctx.stroke();
+  } else if (mark.pressure!==undefined && points.length>1) {
     // Build a single pencil silhouette so overlapping segments keep their translucency.
     const left = [], right = [];
     for (let i=0; i<=Math.ceil(distance); i++) {

@@ -1,6 +1,6 @@
 import {classify,typeNames} from './classify.mjs?v=adaptive';
-import {paper,plan,stroke} from './paint.mjs?v=form-depth';
-import {finishPlan} from './finish.mjs?v=form-depth';
+import {paper,plan,stroke} from './paint.mjs?v=portrait-flow';
+import {finishPlan} from './finish.mjs?v=portrait-flow';
 
 import {correctionPaths} from './restore.mjs?v=continuous';
 
