@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=preflight">
-<script type="module" src="./app.mjs?v=preflight"></script>
+<link rel="stylesheet" href="./style.css?v=precision">
+<script type="module" src="./app.mjs?v=precision"></script>
 </head>
 <body>
 <header>
@@ -49,6 +49,14 @@
 <section class="workspace" aria-label="Холст">
 <div id="surface">
 <canvas id="canvas" hidden aria-label="Текущий рисунок"></canvas>
+<div id="processing" hidden aria-labelledby="processing-title">
+<div class="processing-stage" aria-hidden="true">
+<video id="teto" muted playsinline loop preload="none" src="./teto-birdbrain.webm"></video>
+</div>
+<h2 id="processing-title">Подготовка рисунка</h2>
+<p id="processing-step" role="status">Анализирую изображение…</p>
+<progress id="processing-progress" max="100" value="0" aria-label="Прогресс подготовки"></progress>
+</div>
 </div>
 <div id="playback" hidden>
 <div class="timeline">
@@ -74,18 +82,11 @@
 <input id="brush" type="range" min="60" max="160" step="5" value="100">
 <label class="setting" for="detail">Детализация <output for="detail">65%</output></label>
 <input id="detail" type="range" min="0" max="100" step="5" value="65">
-<label class="mode"><input id="exact" type="checkbox"> Проявить оригинал</label>
+<label class="mode"><input id="exact" type="checkbox" checked> Точное совпадение с оригиналом</label>
 <p class="setting-hint">До старта нажмите на главный объект, чтобы начать набросок с него.</p>
 </aside>
 </div>
+
 </main>
-<dialog id="processing" aria-labelledby="processing-title">
-<div class="processing-stage" aria-hidden="true">
-<video id="teto" muted playsinline loop preload="none" src="./teto-birdbrain.webm"></video>
-</div>
-<h2 id="processing-title">Подготовка рисунка</h2>
-<p id="processing-step" role="status">Анализирую изображение…</p>
-<progress id="processing-progress" max="100" value="0" aria-label="Прогресс подготовки"></progress>
-</dialog>
 </body>
 </html>

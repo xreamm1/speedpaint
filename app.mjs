@@ -1,5 +1,5 @@
 import {paper,plan,stroke,measure} from './paint.mjs?v=preflight';
-import {restorePlan} from './restore.mjs?v=streaks';
+import {restorePlan} from './restore.mjs?v=precision';
 
 const $ = id => document.getElementById(id);
 const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,reset,status,
@@ -20,7 +20,7 @@ const processing = $('processing');
 const teto = $('teto');
 const processingStep = $('processing-step');
 const processingProgress = $('processing-progress');
-processing.addEventListener('cancel',event=>event.preventDefault());
+const compact = matchMedia('(pointer: coarse)');
 const uploadStatus = $('upload-status');
 const phases = [...document.querySelectorAll('ol li')];
 const ctx = canvas.getContext('2d');
@@ -31,13 +31,13 @@ const restoreAt = .70;
 let limits = [0, .20, .36, .72, 1];
 const duration = 64000;
 phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
-const formats = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
+const formats = ['video/webm;codecs=vp8','video/mp4','video/webm'];
 const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
   formats.find(type=>MediaRecorder.isTypeSupported(type));
 let ready = false, loading = false, running = false, exporting = false;
 let time = 0, frame = 0, previous = 0, generation = 0;
 let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
-let original, restoration, focus, prepared;
+let original, restoration, focus, prepared, recordFrame;
 
 function controls() {
   const busy = loading || exporting;
@@ -64,6 +64,8 @@ function updateProgress(fraction) {
   clock.textContent=format(time)+' / '+format(duration);
 }
 function wipe() {
+  original.hidden = true;
+  canvas.style.visibility = '';
   time = phase = index = 0;
   restoration = null;
   updateProgress(0);
@@ -97,18 +99,22 @@ async function load(image) {
     picture.src = url;
     await picture.decode();
     if (ticket!==generation) return;
-    const ratio = Math.min(1, 1280/Math.max(picture.naturalWidth,picture.naturalHeight));
-    canvas.width = painted.width = picture.naturalWidth;
-    canvas.height = painted.height = picture.naturalHeight;
+    const ratio = Math.min(1, (compact.matches ? 800 : 1280)/Math.max(picture.naturalWidth,picture.naturalHeight));
+    canvas.width = painted.width = Math.max(1,Math.round(picture.naturalWidth*ratio));
+    canvas.height = painted.height = Math.max(1,Math.round(picture.naturalHeight*ratio));
     ctx.imageSmoothingQuality = 'high';
-    reference.width = Math.max(1,Math.round(canvas.width*ratio));
-    reference.height = Math.max(1,Math.round(canvas.height*ratio));
+    reference.width = canvas.width;
+    reference.height = canvas.height;
     ink.setTransform(canvas.width/reference.width,0,0,canvas.height/reference.height,0,0);
     const ref = reference.getContext('2d');
     ref.fillStyle = paper;
     ref.fillRect(0,0,reference.width,reference.height);
     ref.drawImage(picture,0,0,reference.width,reference.height);
+    original?.remove();
     original=picture;
+    original.id = 'original-result';
+    original.alt = 'Готовый рисунок';
+    surface.append(original);
     prepared=null;
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
@@ -118,7 +124,7 @@ async function load(image) {
     document.body.classList.add('has-photo');
     document.querySelector('main').append(demo);
     for (const video of demoVideos) video.pause();
-    dimensions.textContent = canvas.width+' × '+canvas.height+' px';
+    dimensions.textContent = picture.naturalWidth+' × '+picture.naturalHeight+' px';
     ready = true;
     focus = null;
     wipe();
@@ -166,7 +172,7 @@ for (const video of demoVideos) {
   video.addEventListener('ended',sync);
   button.addEventListener('click',()=>{
     if (!video.paused) pausedDemos.add(video);
-    else pausedDemos.delete(video);
+    else {pausedDemos.delete(video); video.dataset.manual='true';}
     updateDemoPlayback();
   });
 }
@@ -174,8 +180,8 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
 if (reduceMotion.matches) for (const video of demoVideos) pausedDemos.add(video);
 function updateDemoPlayback() {
   const visible=demoVisible && !demo.classList.contains('is-collapsed') && !document.hidden;
-  for(const video of demoVideos) {
-    if(visible && !pausedDemos.has(video)) video.play().catch(()=>{});
+  for(const [index,video] of demoVideos.entries()) {
+    if(visible && (!ready || video.dataset.manual) && (!compact.matches || index===0 || video.dataset.manual) && !pausedDemos.has(video)) video.play().catch(()=>{});
     else video.pause();
   }
 }
@@ -251,18 +257,19 @@ async function buildPainting() {
   controls();
   processingStep.textContent = 'Анализирую изображение…';
   processingProgress.value = 3;
-  processing.showModal();
+  processing.hidden = false;
+  surface.scrollIntoView({block:'nearest'});
   teto.play().catch(()=>{});
   const opened = performance.now();
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=preflight',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=precision',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
-    const stages = await new Promise((resolve,reject)=>{
+    const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
       worker.onmessage = ({data})=>{
         if (data.error) reject(new Error(data.error));
-        else if (data.stages) resolve(data.stages);
+        else if (data.stages) resolve(data);
         else {
           processingStep.textContent = data.label;
           processingProgress.value = data.value;
@@ -270,23 +277,16 @@ async function buildPainting() {
       };
       worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2]},[bitmap]);
     });
-    prepared = {key,stages};
-    processingStep.textContent = 'Готово. Начинаю рисовать…';
+    prepared = {key,...result};
+    processingStep.textContent = 'Подготовка завершена';
     processingProgress.value = 100;
     if (!reduceMotion.matches) {
-      await new Promise(resolve=>setTimeout(resolve,Math.max(0,3100-(performance.now()-opened))));
-      teto.pause();
-      const distance = innerHeight-teto.getBoundingClientRect().top+60;
-      await teto.animate([
-        {transform:'translate(0,0) rotate(0deg)',offset:0},
-        {transform:'translate(4px,-12px) rotate(7deg)',offset:.19,easing:'cubic-bezier(.55,.04,.92,.44)'},
-        {transform:`translate(86px,${distance}px) rotate(71deg)`,offset:1}
-      ],{duration:760}).finished;
+      await new Promise(resolve=>setTimeout(resolve,Math.max(0,5200-(performance.now()-opened))));
     }
   } finally {
     worker?.terminate();
     teto.pause();
-    processing.close();
+    processing.hidden = true;
     teto.currentTime = 0;
     loading = false;
     controls();
@@ -318,8 +318,7 @@ function render(fraction) {
   while (index<marks.length && (timing[index].end<=value+1e-7 || fraction>=stopAt)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0);
   if (exact.checked && fraction>=restoreAt) {
-    const [x,y]=sequence[phase].tail || [reference.width*.5,reference.height*.5];
-    restoration=restorePlan(ctx,original,[x*canvas.width/reference.width,y*canvas.height/reference.height]);
+    restoration=restorePlan(ctx,original,prepared.corrections);
     restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt)));
     updateProgress(fraction);
     return;
@@ -365,6 +364,15 @@ function play(rate, done) {
     }
     previous = now;
     render(time/duration);
+    if (time>=duration && exact.checked) {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(original,0,0,canvas.width,canvas.height);
+      if (!exporting) {
+        original.hidden = false;
+        canvas.style.visibility = 'hidden';
+      }
+    }
+    recordFrame?.(now);
     if (time<duration) {
       frame = requestAnimationFrame(tick);
     } else {
@@ -418,6 +426,18 @@ function save(blob, name) {
 }
 savePng.addEventListener('click',()=>{
   const name = photoName+'-final.png';
+  if (exact.checked) {
+    const native = document.createElement('canvas');
+    native.width = original.naturalWidth;
+    native.height = original.naturalHeight;
+    native.getContext('2d').drawImage(original,0,0);
+    native.toBlob(blob=>{
+      native.width = native.height = 1;
+      if (blob) save(blob,name);
+      else status.textContent = 'Не удалось сохранить PNG.';
+    },'image/png');
+    return;
+  }
   canvas.toBlob(blob=>{
     if (blob) save(blob,name);
     else status.textContent = 'Не удалось сохранить PNG.';
@@ -428,19 +448,39 @@ download.addEventListener('click',()=>{
   running = false;
   let stream, recorder, hold, still;
   const chunks = [];
+  const videoCanvas = document.createElement('canvas');
   function finish(message) {
     clearTimeout(hold);
     clearInterval(still);
     cancelAnimationFrame(frame);
+    recordFrame = null;
     stream?.getTracks().forEach(track=>track.stop());
+    videoCanvas.width = videoCanvas.height = 1;
     running = exporting = false;
+    if (time>=duration && exact.checked) {
+      original.hidden = false;
+      canvas.style.visibility = 'hidden';
+    }
     status.textContent = message;
     controls();
   }
   try {
     prepare();
-    stream = canvas.captureStream(60);
-    const videoBitsPerSecond = Math.max(5000000,Math.min(80000000,Math.round(canvas.width*canvas.height*10)));
+    const fps = compact.matches ? 24 : 30;
+    const scale = Math.min(1,(compact.matches ? 720 : 1280)/Math.max(canvas.width,canvas.height));
+    videoCanvas.width = Math.max(1,Math.round(canvas.width*scale));
+    videoCanvas.height = Math.max(1,Math.round(canvas.height*scale));
+    const videoContext = videoCanvas.getContext('2d',{alpha:false});
+    const copyFrame = ()=>videoContext.drawImage(canvas,0,0,videoCanvas.width,videoCanvas.height);
+    let lastFrame = -Infinity;
+    recordFrame = now=>{
+      if (now-lastFrame < 1000/fps-1) return;
+      lastFrame = now;
+      copyFrame();
+    };
+    copyFrame();
+    stream = videoCanvas.captureStream(fps);
+    const videoBitsPerSecond = compact.matches ? 1800000 : 4200000;
     recorder = new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond});
     recorder.ondataavailable = event=>{ if (event.data.size) chunks.push(event.data); };
     recorder.onerror = ()=>finish('Не удалось записать видео.');
@@ -455,7 +495,7 @@ download.addEventListener('click',()=>{
       save(blob,photoName+'-speedpaint.'+(type.includes('mp4')?'mp4':'webm'));
       finish('Видео готово. Проверьте загрузки браузера.');
     };
-    recorder.start();
+    recorder.start(1000);
     const rate = +speed.value;
     exporting = true;
     status.textContent = 'Записываю видео с начала. Оставьте вкладку открытой.';
@@ -463,14 +503,11 @@ download.addEventListener('click',()=>{
       // Keep feeding a cursor-free canvas while the encoder drains its last frames.
       const [track]=stream.getVideoTracks();
       const showFinal=()=>{
-        ctx.save();
-        ctx.globalCompositeOperation='copy';
-        ctx.drawImage(canvas,0,0);
-        ctx.restore();
+        copyFrame();
         track.requestFrame?.();
       };
       showFinal();
-      still=setInterval(showFinal,1000/30);
+      still=setInterval(showFinal,1000/fps);
       hold=setTimeout(()=>recorder.stop(),700);
     });
   } catch {

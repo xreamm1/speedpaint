@@ -1,14 +1,6 @@
 // Paint native-resolution corrections in small footprints along local flows.
-export function restorePlan(ctx, original, previous) {
-  const {width,height} = ctx.canvas;
-  const target = ctx.getImageData(0,0,width,height);
-  const sourceCanvas = document.createElement('canvas');
-  sourceCanvas.width = width;
-  sourceCanvas.height = height;
-  const sourceContext = sourceCanvas.getContext('2d');
-  sourceContext.drawImage(original,0,0);
-  const source = sourceContext.getImageData(0,0,width,height);
-  sourceCanvas.width = sourceCanvas.height = 1;
+export function correctionPaths(target, source, previous) {
+  const {width,height} = target;
   const before = new Uint32Array(target.data.buffer);
   const after = new Uint32Array(source.data.buffer);
   const scale = Math.max(1,Math.max(width,height)/390);
@@ -98,6 +90,17 @@ export function restorePlan(ctx, original, previous) {
     }
   }
 
+  return {operations,cols,xs,ys};
+}
+
+export function restorePlan(ctx, original, {operations,cols,xs,ys}) {
+  const {width,height} = ctx.canvas;
+  const target = ctx.getImageData(0,0,width,height);
+  const sample = new OffscreenCanvas(width,height).getContext('2d',{willReadFrequently:true});
+  sample.drawImage(original,0,0,width,height);
+  const source = sample.getImageData(0,0,width,height);
+  const before = new Uint32Array(target.data.buffer);
+  const after = new Uint32Array(source.data.buffer);
   let operation=0, substep=0;
   const initial=target.data.slice();
   const fading=[];
