@@ -3,8 +3,9 @@ import {staffGroups} from './classify.mjs?v=adaptive';
 export const paper = '#eee7da';
 
 const clipPaths = new WeakMap();
+const grounds = new WeakMap();
 
-function smoothMask(region,cols,step) {
+export function smoothMask(region,cols,step,tolerance=.77) {
   const cells=new Set(region);
   const stride=cols+1;
   const edges=new Map();
@@ -28,7 +29,7 @@ function smoothMask(region,cols,step) {
       const [first,last]=spans.pop();
       const [x,y]=points[first], [endX,endY]=points[last];
       const dx=endX-x,dy=endY-y,length=dx*dx+dy*dy;
-      let farthest=0,best=.77;
+      let farthest=0,best=tolerance;
       for(let i=first+1;i<last;i++) {
         const px=points[i][0]-x,py=points[i][1]-y;
         const t=length?Math.max(0,Math.min(1,(px*dx+py*dy)/length)):0;
@@ -65,7 +66,7 @@ function smoothMask(region,cols,step) {
     const simplified=contour.length>8?simplify([...contour,contour[0]]):contour;
     const points=simplified.length>=3?simplified:contour;
     const near=(a,b)=>{
-      const t=Math.min(.42,1.15/Math.hypot(b[0]-a[0],b[1]-a[1]));
+      const t=Math.min(.42,(tolerance<.3?.10:1.15)/Math.hypot(b[0]-a[0],b[1]-a[1]));
       return [step*(a[0]+(b[0]-a[0])*t),step*(a[1]+(b[1]-a[1])*t)];
     };
     commands.push('M',...near(points[0],points.at(-1)));
@@ -604,6 +605,58 @@ export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
     ctx.clip(clipPaths.get(mark.clip),'evenodd');
   }
   const {points,width,color,opacity} = mark;
+  if (mark.ground) {
+    const {x,y,w,h,planes}=mark.ground;
+    let patch=grounds.get(mark);
+    if (!patch) {
+      patch=new OffscreenCanvas(w,h);
+      const layer=patch.getContext('2d',{alpha:false});
+      layer.globalCompositeOperation='lighter';
+      for (const [channel,[base,dx,dy]] of planes.entries()) {
+        const norm=Math.hypot(dx,dy);
+        const color=value=>'rgb('+[0,0,0].map((_,k)=>k===channel?Math.max(0,Math.min(255,value)):0).join(',')+')';
+        let ink=color(base);
+        if (norm>1e-6) {
+          const projections=[0,w*dx,h*dy,w*dx+h*dy];
+          const lo=Math.min(...projections),hi=Math.max(...projections);
+          const gradient=layer.createLinearGradient(dx*lo/norm**2,dy*lo/norm**2,dx*hi/norm**2,dy*hi/norm**2);
+          gradient.addColorStop(0,color(base+lo));
+          gradient.addColorStop(1,color(base+hi));
+          ink=gradient;
+        }
+        layer.fillStyle=ink;
+        layer.fillRect(0,0,w,h);
+      }
+      grounds.set(mark,patch);
+    }
+    const visible=w*fraction;
+    if (visible>0) ctx.drawImage(patch,0,0,visible,h,x,y,visible,h);
+    ctx.restore();
+    return;
+  }
+  if (mark.ribbon) {
+    ctx.fillStyle=color;
+    if (fraction===1) ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    else {
+      const tip=position(mark,fraction);
+      ctx.beginPath();
+      for (let i=0;i<=Math.ceil(tip) && i<points.length;i++) {
+        let [x,y]=points[i];
+        let radius=mark.radii[i];
+        if (i>tip) {
+          const t=tip-i+1;
+          x=points[i-1][0]+(x-points[i-1][0])*t;
+          y=points[i-1][1]+(y-points[i-1][1])*t;
+          radius=mark.radii[i-1]+(radius-mark.radii[i-1])*t;
+        }
+        ctx.moveTo(x+radius,y);
+        ctx.arc(x,y,radius,0,Math.PI*2);
+      }
+      ctx.fill();
+    }
+    ctx.restore();
+    return;
+  }
   const distance = position(mark,fraction);
   ctx.globalAlpha = opacity*opacityScale;
   ctx.lineWidth = width;

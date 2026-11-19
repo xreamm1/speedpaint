@@ -1,6 +1,7 @@
+import {whiteRibbons,ribbonGround} from './geometry.mjs?v=ribbon';
 import {classify,typeNames} from './classify.mjs?v=adaptive';
-import {paper,plan,stroke} from './paint.mjs?v=illustration-lines';
-import {finishPlan} from './finish.mjs?v=illustration-lines';
+import {paper,plan,stroke} from './paint.mjs?v=ribbon';
+import {finishPlan} from './finish.mjs?v=ribbon';
 
 import {correctionPaths} from './restore.mjs?v=continuous';
 
@@ -265,7 +266,29 @@ self.onmessage = async ({data:{bitmap,brush,detail,focus,exact,quality,requested
     }
     for (const mark of accents) stroke(ctx,mark);
     if (accents.length) best = ctx.getImageData(0,0,width,height);
-    stages.push([...refinements,...accents]);
+    const ribbons=type==='illustration' ? whiteRibbons(source) : [];
+    const grounds=[];
+    for (const ribbon of ribbons.filter(mark=>mark.points.length>49).slice(0,8)) {
+      const mark=ribbonGround(source,ribbon);
+      if (!mark) continue;
+      const {x,y,w,h}=mark.ground;
+      const prior=ctx.getImageData(x,y,w,h);
+      stroke(ctx,mark);
+      const candidate=ctx.getImageData(x,y,w,h);
+      let before=0,after=0;
+      for (let py=0;py<h;py++) for (let px=0;px<w;px++) {
+        const src=((y+py)*width+x+px)*4, dst=(py*w+px)*4;
+        for (let k=0;k<3;k++) {
+          before+=Math.abs(source.data[src+k]-prior.data[dst+k]);
+          after+=Math.abs(source.data[src+k]-candidate.data[dst+k]);
+        }
+      }
+      if (after<before*.99) grounds.push(mark);
+      else ctx.putImageData(prior,x,y);
+    }
+    for (const mark of ribbons) stroke(ctx,mark);
+    if (ribbons.length) best = ctx.getImageData(0,0,width,height);
+    stages.push([...refinements,...accents,...grounds,...ribbons]);
     if (exact) report('Прокладываю финальные уточнения вдоль контуров',98);
     const tail = (stages[3].at(-1) || stages[2].at(-1))?.points.at(-1);
     const corrections = exact ? correctionPaths(best,source,tail) : null;
