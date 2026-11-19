@@ -5,7 +5,7 @@ import {finishPlan} from './finish.mjs?v=ribbon';
 
 import {correctionPaths} from './restore.mjs?v=continuous';
 
-self.onmessage = async ({data:{bitmap,brush,detail,focus,exact,quality,requested}}) => {
+self.onmessage = async ({data:{bitmap,brush,detail,focus,exact,quality,requested,geometry}}) => {
   const report = (label,value) => self.postMessage({label,value});
   const deadline = performance.now()+20000;
   try {
@@ -266,7 +266,7 @@ self.onmessage = async ({data:{bitmap,brush,detail,focus,exact,quality,requested
     }
     for (const mark of accents) stroke(ctx,mark);
     if (accents.length) best = ctx.getImageData(0,0,width,height);
-    const ribbons=type==='illustration' ? whiteRibbons(source) : [];
+    const ribbons=geometry && type==='illustration' ? whiteRibbons(source) : [];
     const grounds=[];
     for (const ribbon of ribbons.filter(mark=>mark.points.length>49).slice(0,8)) {
       const mark=ribbonGround(source,ribbon);

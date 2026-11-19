@@ -9,6 +9,7 @@ const download = $('export');
 const savePng = $('save-png');
 const exact = $('exact');
 const quality = $('quality');
+const geometryMode = $('geometry-mode');
 const imageType = $('image-type');
 const detectedType = $('detected-type');
 const demo = $('demo');
@@ -60,7 +61,7 @@ function controls() {
   canvas.classList.toggle('can-pick',ready && !busy && !running && time===0);
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
-  imageType.disabled = quality.disabled = exact.disabled = busy || running || time>0 && !complete;
+  imageType.disabled = geometryMode.disabled = quality.disabled = exact.disabled = busy || running || time>0 && !complete;
   start.textContent = running && !exporting ? 'Пауза' : complete ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
   start.classList.toggle('primary',!complete && !exporting);
 }
@@ -278,14 +279,16 @@ imageType.addEventListener('change',()=>{
   detectedType.textContent = '';
   if (time) reset.click();
 });
-quality.addEventListener('change',()=>{if(time) reset.click();});
+for (const setting of [quality,geometryMode]) {
+  setting.addEventListener('change',()=>{if(time) reset.click();});
+}
 exact.addEventListener('change',()=>{
   if (!ready) return;
   if (time) reset.click();
   updatePngLabel();
 });
 async function buildPainting() {
-  const settings = [+brush.value,+detail.value,focus,exact.checked,quality.checked,imageType.value];
+  const settings = [+brush.value,+detail.value,focus,exact.checked,quality.checked,imageType.value,geometryMode.checked];
   const key = JSON.stringify(settings);
   if (prepared?.key===key) return;
   loading = true;
@@ -297,7 +300,7 @@ async function buildPainting() {
   teto.play().catch(()=>{});
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=ribbon',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=geometry-mode',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
@@ -309,7 +312,7 @@ async function buildPainting() {
           processingProgress.value = data.value;
         }
       };
-      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3],quality:settings[4],requested:settings[5]},[bitmap]);
+      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3],quality:settings[4],requested:settings[5],geometry:settings[6]},[bitmap]);
     });
     prepared = {key,...result};
     detectedType.textContent = result.typeName;
