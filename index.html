@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=refinement">
-<script type="module" src="./app.mjs?v=refinement"></script>
+<link rel="stylesheet" href="./style.css?v=continuous">
+<script type="module" src="./app.mjs?v=continuous"></script>
 </head>
 <body>
 <header>
@@ -61,7 +61,8 @@
 <div id="playback" hidden>
 <div class="timeline">
 <progress id="progress" value="0" max="1" aria-label="Прогресс рисования"></progress>
-<ol aria-label="Этапы рисования"><li>Набросок</li><li>Подмалёвок</li><li>Детализация</li></ol>
+<ol aria-label="Этапы рисования"><li><span>Набросок</span></li><li><span>Подмалёвок</span></li><li><span>Детализация</span></li></ol>
+<p id="current-stage" aria-hidden="true"></p>
 </div>
 <div class="controls">
 <button id="start" class="primary" disabled>Старт</button>
@@ -71,7 +72,7 @@
 </div>
 <div id="downloads" hidden>
 <button id="export" class="primary" disabled>Скачать видео</button>
-<button id="save-png" disabled>Сохранить PNG</button>
+<button id="save-png" disabled>Оригинал в PNG</button>
 </div>
 </div>
 <p id="status" role="status"></p>

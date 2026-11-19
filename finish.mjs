@@ -31,7 +31,7 @@ export function finishPlan(ctx, reference, detail, fillGaps = false) {
           const edge=Math.hypot(gx,gy);
           const dot=Math.abs(center)>26 && edge<Math.abs(center)*1.8;
           const highlight=light>190 && light>(.30*actual[i]+.59*actual[i+1]+.11*actual[i+2])+14;
-          const score=error*Math.min(1,Math.max(fillGaps?.46:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
+          const score=error*Math.min(1,Math.max(fillGaps?.78:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
           if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight,broad:fillGaps && edge<16 && Math.abs(center)<12};
         }
       }
@@ -40,12 +40,12 @@ export function finishPlan(ctx, reference, detail, fillGaps = false) {
   }
   candidates.sort((a,b)=>b.score-a.score);
   const marks=[];
-  const cap=32+Math.round(detail*.92);
+  const cap=(fillGaps?76:48)+Math.round(detail*1.15);
   const centerOf=({points})=>points[Math.floor(points.length/2)];
   for(const {x,y,gx,gy,score,dot,highlight,broad} of candidates) {
     if(marks.length>=cap) break;
     if(marks.some(mark=>{const [px,py]=centerOf(mark);return Math.hypot(px-x,py-y)<stride*.75;})) continue;
-    const angle=Math.atan2(gy,gx)+Math.PI/2;
+    const angle=broad ? -.55+.35*Math.sin(x*.039+y*.026) : Math.atan2(gy,gx)+Math.PI/2;
     const length=stride*(broad?1.10:dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
     const dx=Math.cos(angle)*length, dy=Math.sin(angle)*length;
     const normal=Math.max(1,Math.hypot(gx,gy));

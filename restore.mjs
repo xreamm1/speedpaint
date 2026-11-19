@@ -104,7 +104,7 @@ export function restorePlan(ctx, original, {operations,cols,xs,ys}) {
   let operation=0, substep=0;
   const initial=target.data.slice();
   const fading=[];
-  const settle=Math.max(1,operations.length*.038);
+  const settle=Math.max(1,operations.length*.20);
   return function render(progress) {
     const value=progress*(operations.length+settle);
     const end=Math.min(operations.length,Math.floor(value));

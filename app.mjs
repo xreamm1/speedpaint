@@ -1,5 +1,5 @@
 import {paper,plan,stroke,measure} from './paint.mjs?v=preflight';
-import {restorePlan} from './restore.mjs?v=precision';
+import {restorePlan} from './restore.mjs?v=continuous';
 
 const $ = id => document.getElementById(id);
 const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,reset,status,
@@ -21,12 +21,14 @@ const processingStep = $('processing-step');
 const processingProgress = $('processing-progress');
 const compact = matchMedia('(pointer: coarse)');
 const uploadStatus = $('upload-status');
-const phases = [...document.querySelectorAll('ol li')];
+const phases = [...document.querySelectorAll('.timeline li')];
+const currentStage = $('current-stage');
+let displayedStage = -1;
 const ctx = canvas.getContext('2d');
 const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
-const restoreAt = .70;
+const restoreAt = .88;
 const limits = [0,.20,.36,.62,restoreAt];
 const duration = 64000;
 phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
@@ -38,6 +40,10 @@ let time = 0, frame = 0, previous = 0, generation = 0;
 let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
 let original, restoration, focus, prepared, recordFrame;
 
+function videoSize() {
+  const scale = Math.min(1,(compact.matches ? 720 : 1280)/Math.max(canvas.width,canvas.height));
+  return [Math.max(1,Math.round(canvas.width*scale)),Math.max(1,Math.round(canvas.height*scale))];
+}
 function controls() {
   const busy = loading || exporting;
   const complete = time>=duration;
@@ -58,6 +64,17 @@ function updateProgress(fraction) {
     const seconds=Math.floor(ms/1000);
     return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
   };
+  const activeStage = Math.min(2,phase);
+  if (activeStage!==displayedStage) {
+    const previousStage = phases[displayedStage];
+    previousStage?.classList.remove('active');
+    previousStage?.removeAttribute('aria-current');
+    const item = phases[activeStage];
+    item.classList.add('active');
+    item.setAttribute('aria-current','step');
+    currentStage.textContent = item.textContent;
+    displayedStage = activeStage;
+  }
   progress.value=fraction;
   clock.textContent=format(time)+' / '+format(duration);
 }
@@ -67,7 +84,6 @@ function wipe() {
   time = phase = index = 0;
   restoration = null;
   updateProgress(0);
-  for (const item of phases) item.classList.remove('active');
   ink.fillStyle = paper;
   ink.fillRect(0,0,reference.width,reference.height);
   ctx.drawImage(painted,0,0);
@@ -122,6 +138,8 @@ async function load(image) {
     document.body.classList.add('has-photo');
     document.querySelector('main').append(demo);
     for (const video of demoVideos) video.pause();
+    if (mime) download.textContent = 'Скачать ' + (mime.includes('mp4') ? 'MP4' : 'WebM') + ' · ' + videoSize().join(' × ');
+    savePng.textContent = 'Оригинал в PNG · ' + picture.naturalWidth + ' × ' + picture.naturalHeight;
     dimensions.textContent = picture.naturalWidth+' × '+picture.naturalHeight+' px';
     ready = true;
     focus = null;
@@ -257,10 +275,9 @@ async function buildPainting() {
   processing.hidden = false;
   surface.scrollIntoView({block:'nearest'});
   teto.play().catch(()=>{});
-  const opened = performance.now();
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=refinement',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=continuous',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
@@ -277,9 +294,6 @@ async function buildPainting() {
     prepared = {key,...result};
     processingStep.textContent = 'Подготовка завершена';
     processingProgress.value = 100;
-    if (!reduceMotion.matches) {
-      await new Promise(resolve=>setTimeout(resolve,Math.max(0,5200-(performance.now()-opened))));
-    }
   } finally {
     worker?.terminate();
     teto.pause();
@@ -331,7 +345,6 @@ function render(fraction) {
       ctx.restore();
     }
   }
-  phases.forEach((item,i)=>item.classList.toggle('active',i===Math.min(2,phase)));
   updateProgress(fraction);
 }
 
@@ -456,9 +469,7 @@ download.addEventListener('click',()=>{
   try {
     prepare();
     const fps = compact.matches ? 24 : 30;
-    const scale = Math.min(1,(compact.matches ? 720 : 1280)/Math.max(canvas.width,canvas.height));
-    videoCanvas.width = Math.max(1,Math.round(canvas.width*scale));
-    videoCanvas.height = Math.max(1,Math.round(canvas.height*scale));
+    [videoCanvas.width,videoCanvas.height] = videoSize();
     const videoContext = videoCanvas.getContext('2d',{alpha:false});
     const copyFrame = ()=>videoContext.drawImage(canvas,0,0,videoCanvas.width,videoCanvas.height);
     let lastFrame = -Infinity;

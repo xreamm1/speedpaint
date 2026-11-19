@@ -1,7 +1,7 @@
 import {paper,plan,stroke} from './paint.mjs?v=preflight';
-import {finishPlan} from './finish.mjs?v=refinement';
+import {finishPlan} from './finish.mjs?v=continuous';
 
-import {correctionPaths} from './restore.mjs?v=precision';
+import {correctionPaths} from './restore.mjs?v=continuous';
 
 self.onmessage = ({data:{bitmap,brush,detail,focus}}) => {
   const report = (label,value) => self.postMessage({label,value});
@@ -33,7 +33,7 @@ self.onmessage = ({data:{bitmap,brush,detail,focus}}) => {
     const passes = width*height < 420000 ? 6 : 10;
     for (let pass=0;pass<passes;pass++) {
       report(`Сверяю цвета, контуры и пропуски · ${pass+1}/${passes}`,74+pass*23/passes);
-      const marks = finishPlan(ctx,reference,detail,pass<passes/2);
+      const marks = finishPlan(ctx,reference,detail,pass<Math.ceil(passes*.65));
       if (!marks.length) break;
       for (const mark of marks) stroke(ctx,mark);
       const candidate = ctx.getImageData(0,0,width,height);
