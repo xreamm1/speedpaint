@@ -594,6 +594,11 @@ export function position(mark, fraction) {
 }
 
 export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
+  if (mark.fill) {
+    ctx.fillStyle=mark.fill;
+    ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    return;
+  }
   if (mark.clip || mark.zone) ctx.save();
   if (mark.zone) {
     ctx.beginPath();

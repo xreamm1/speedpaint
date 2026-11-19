@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=adaptive">
-<script type="module" src="./app.mjs?v=geometry-mode"></script>
+<link rel="stylesheet" href="./style.css?v=universal">
+<script type="module" src="./app.mjs?v=universal"></script>
 </head>
 <body>
 <header>
@@ -61,7 +61,7 @@
 <div id="playback" hidden>
 <div class="timeline">
 <progress id="progress" value="0" max="1" aria-label="Прогресс рисования"></progress>
-<ol aria-label="Этапы рисования"><li><span>Набросок</span></li><li><span>Подмалёвок</span></li><li><span>Детализация</span></li></ol>
+<ol aria-label="Этапы рисования"><li><span>Основа</span></li><li><span>Подмалёвок</span></li><li><span>Детализация</span></li></ol>
 <p id="current-stage" aria-hidden="true"></p>
 </div>
 <div class="controls">
@@ -79,23 +79,15 @@
 </section>
 <aside aria-label="Настройки кисти">
 <h2>Настройки</h2>
-<label class="setting" for="image-type">Тип изображения</label>
-<select id="image-type">
-<option value="auto">Авто</option><option value="ink">Лайн-арт и текст</option>
-<option value="score">Ноты</option><option value="illustration">Иллюстрация</option>
-<option value="portrait">Фотопортрет</option><option value="photo">Фотография</option>
-</select>
-<output id="detected-type"></output>
 <label class="setting" for="brush">Размер кисти <output for="brush">100%</output></label>
 <input id="brush" type="range" min="60" max="160" step="5" value="100">
 <label class="setting" for="detail">Детализация <output for="detail">65%</output></label>
 <input id="detail" type="range" min="0" max="100" step="5" value="65">
 
-<label class="mode"><input id="quality" type="checkbox"> Качественно · портрет</label>
+<label class="mode"><input id="quality" type="checkbox"> Больше пробных мазков</label>
 <label class="mode"><input id="geometry-mode" type="checkbox" aria-describedby="geometry-hint"> Рисование по формам</label>
-<p id="geometry-hint" class="setting-hint">Экспериментальный режим для белых лент на бирюзовых участках иллюстраций.</p>
-<label class="mode"><input id="exact" type="checkbox"> Проявить оригинал</label>
-<p class="setting-hint">Для портрета включите «Качественно» и нажмите на переносицу. Для других фото нажмите на главный объект.</p>
+<p id="geometry-hint" class="setting-hint">Экспериментальный режим для белых лент на бирюзовых участках.</p>
+<p class="setting-hint">Нажмите на важную область фото, чтобы повысить её приоритет.</p>
 </aside>
 </div>
 

@@ -1,5 +1,4 @@
-import {paper,stroke,measure} from './paint.mjs?v=ribbon';
-import {restorePlan} from './restore.mjs?v=continuous';
+import {paper,stroke,measure} from './paint.mjs?v=universal';
 
 const $ = id => document.getElementById(id);
 const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,detail,start,reset,status,
@@ -7,11 +6,8 @@ const {canvas,file,surface,drop,source,filename,dimensions,progress,speed,brush,
   Object.fromEntries('canvas file surface drop source filename dimensions progress speed brush detail start reset status replace choose playback downloads clock'.split(' ').map(id=>[id,$(id)]));
 const download = $('export');
 const savePng = $('save-png');
-const exact = $('exact');
 const quality = $('quality');
 const geometryMode = $('geometry-mode');
-const imageType = $('image-type');
-const detectedType = $('detected-type');
 const demo = $('demo');
 const demoVideos = [...demo.querySelectorAll('video')];
 const pausedDemos = new Set();
@@ -33,8 +29,7 @@ const ctx = canvas.getContext('2d');
 const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
-const restoreAt = .88;
-let limits = [0,.20,.36,.62,restoreAt];
+const limits = [0,.17,.58,.78,1];
 const duration = 64000;
 phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
 const formats = ['video/webm;codecs=vp8','video/mp4','video/webm'];
@@ -43,7 +38,7 @@ const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
 let ready = false, loading = false, running = false, exporting = false;
 let time = 0, frame = 0, previous = 0, generation = 0;
 let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
-let original, restoration, focus, prepared, recordFrame;
+let original, focus, prepared, recordFrame;
 
 function videoSize() {
   const scale = Math.min(1,(compact.matches ? 720 : 1280)/Math.max(canvas.width,canvas.height));
@@ -61,7 +56,7 @@ function controls() {
   canvas.classList.toggle('can-pick',ready && !busy && !running && time===0);
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
-  imageType.disabled = geometryMode.disabled = quality.disabled = exact.disabled = busy || running || time>0 && !complete;
+  geometryMode.disabled = quality.disabled = busy || running || time>0 && !complete;
   start.textContent = running && !exporting ? 'Пауза' : complete ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
   start.classList.toggle('primary',!complete && !exporting);
 }
@@ -85,10 +80,7 @@ function updateProgress(fraction) {
   clock.textContent=format(time)+' / '+format(duration);
 }
 function wipe() {
-  original.hidden = true;
-  canvas.style.visibility = '';
   time = phase = index = 0;
-  restoration = null;
   updateProgress(0);
   ink.fillStyle = paper;
   ink.fillRect(0,0,reference.width,reference.height);
@@ -96,7 +88,7 @@ function wipe() {
 }
 function showFocus() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(original,0,0);
+  ctx.drawImage(original,0,0,canvas.width,canvas.height);
   if (!focus) return;
   const radius=Math.max(8,Math.max(canvas.width,canvas.height)*.015);
   ctx.beginPath();
@@ -119,7 +111,7 @@ async function load(image) {
     picture.src = url;
     await picture.decode();
     if (ticket!==generation) return;
-    const ratio = Math.min(1, (compact.matches ? 800 : 1280)/Math.max(picture.naturalWidth,picture.naturalHeight));
+    const ratio = Math.min(1, (compact.matches ? 800 : 960)/Math.max(picture.naturalWidth,picture.naturalHeight));
     canvas.width = painted.width = Math.max(1,Math.round(picture.naturalWidth*ratio));
     canvas.height = painted.height = Math.max(1,Math.round(picture.naturalHeight*ratio));
     ctx.imageSmoothingQuality = 'high';
@@ -127,16 +119,11 @@ async function load(image) {
     reference.height = canvas.height;
     ink.setTransform(canvas.width/reference.width,0,0,canvas.height/reference.height,0,0);
     const ref = reference.getContext('2d');
-    ref.fillStyle = paper;
+    ref.fillStyle = 'white';
     ref.fillRect(0,0,reference.width,reference.height);
     ref.drawImage(picture,0,0,reference.width,reference.height);
-    original?.remove();
     original=picture;
-    original.id = 'original-result';
-    original.alt = 'Готовый рисунок';
-    surface.append(original);
     prepared=null;
-    detectedType.textContent = '';
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
@@ -146,7 +133,7 @@ async function load(image) {
     document.querySelector('main').append(demo);
     for (const video of demoVideos) video.pause();
     if (mime) download.textContent = 'Скачать ' + (mime.includes('mp4') ? 'MP4' : 'WebM') + ' · ' + videoSize().join(' × ');
-    updatePngLabel();
+    savePng.textContent = 'Рисунок в PNG · ' + canvas.width + ' × ' + canvas.height;
     dimensions.textContent = picture.naturalWidth+' × '+picture.naturalHeight+' px';
     ready = true;
     focus = null;
@@ -271,24 +258,11 @@ function schedule(marks,stage,tail) {
   });
   return {marks,timing,end,tail};
 }
-function updatePngLabel() {
-  const size = exact.checked ? [original.naturalWidth,original.naturalHeight] : [canvas.width,canvas.height];
-  savePng.textContent = (exact.checked ? 'Оригинал в PNG' : 'Рисунок в PNG') + ' · ' + size.join(' × ');
-}
-imageType.addEventListener('change',()=>{
-  detectedType.textContent = '';
-  if (time) reset.click();
-});
 for (const setting of [quality,geometryMode]) {
   setting.addEventListener('change',()=>{if(time) reset.click();});
 }
-exact.addEventListener('change',()=>{
-  if (!ready) return;
-  if (time) reset.click();
-  updatePngLabel();
-});
 async function buildPainting() {
-  const settings = [+brush.value,+detail.value,focus,exact.checked,quality.checked,imageType.value,geometryMode.checked];
+  const settings = {brush:+brush.value,detail:+detail.value,focus,quality:quality.checked,geometry:geometryMode.checked};
   const key = JSON.stringify(settings);
   if (prepared?.key===key) return;
   loading = true;
@@ -300,7 +274,7 @@ async function buildPainting() {
   teto.play().catch(()=>{});
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=geometry-mode',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./universal.mjs?v=universal',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
@@ -312,10 +286,9 @@ async function buildPainting() {
           processingProgress.value = data.value;
         }
       };
-      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3],quality:settings[4],requested:settings[5],geometry:settings[6]},[bitmap]);
+      worker.postMessage({bitmap,...settings},[bitmap]);
     });
     prepared = {key,...result};
-    detectedType.textContent = result.typeName;
     processingStep.textContent = 'Подготовка завершена';
     processingProgress.value = 100;
   } finally {
@@ -328,8 +301,6 @@ async function buildPainting() {
   }
 }
 function prepare() {
-  limits = [0,.20,.40,.63,exact.checked ? restoreAt : 1];
-  phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
   sequence=[];
   for (const [stage,marks] of prepared.stages.entries()) {
     sequence.push(schedule(marks,stage,sequence.at(-1)?.tail));
@@ -337,11 +308,6 @@ function prepare() {
   wipe();
 }
 function render(fraction) {
-  if (restoration) {
-    restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt)));
-    updateProgress(fraction);
-    return;
-  }
   while (phase<3 && fraction>=limits[phase+1]) {
     const {marks} = sequence[phase];
     while (index<marks.length) stroke(ink,marks[index++]);
@@ -353,12 +319,6 @@ function render(fraction) {
   const value = end*(Math.min(fraction,stopAt)-limits[phase])/(stopAt-limits[phase]);
   while (index<marks.length && (timing[index].end<=value+1e-7 || fraction>=stopAt)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0);
-  if (exact.checked && fraction>=restoreAt) {
-    restoration=restorePlan(ctx,original,prepared.corrections);
-    restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt)));
-    updateProgress(fraction);
-    return;
-  }
   const scaleX=canvas.width/reference.width, scaleY=canvas.height/reference.height;
   if (index<marks.length) {
     const {begin,end: stop} = timing[index];
@@ -374,20 +334,6 @@ function render(fraction) {
   updateProgress(fraction);
 }
 
-// At normal speed, even a late frame must show the brush in contact before a stroke is completed.
-function keepContactVisible(next,rate) {
-  const stage=sequence[phase];
-  const mark=stage?.timing[index];
-  if (rate>1 || restoration || !mark) return next;
-  const start=limits[phase]*duration;
-  const span=(limits[phase+1]-limits[phase])*duration/stage.end;
-  const contact=start+(mark.begin+(mark.end-mark.begin)*.5)*span;
-  const end=start+mark.end*span;
-  if(time<contact && next>contact) return contact;
-  if(time<end && next>end) return end;
-  return next;
-}
-
 function play(rate, done) {
   previous = 0;
   running = true;
@@ -395,18 +341,10 @@ function play(rate, done) {
   function tick(now) {
     if (previous) {
       const speed=rate();
-      time=keepContactVisible(Math.min(duration,time+Math.min(67,now-previous)*speed),speed);
+      time=Math.min(duration,time+Math.min(67,now-previous)*speed);
     }
     previous = now;
     render(time/duration);
-    if (exact.checked && time>=duration) {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.drawImage(original,0,0,canvas.width,canvas.height);
-      if (!exporting) {
-        original.hidden = false;
-        canvas.style.visibility = 'hidden';
-      }
-    }
     recordFrame?.(now);
     if (time<duration) {
       frame = requestAnimationFrame(tick);
@@ -461,19 +399,7 @@ function save(blob, name) {
 }
 savePng.addEventListener('click',()=>{
   const name = photoName+'-final.png';
-  if (!exact.checked) {
-    canvas.toBlob(blob=>{
-      if (blob) save(blob,name);
-      else status.textContent = 'Не удалось сохранить PNG.';
-    },'image/png');
-    return;
-  }
-  const native = document.createElement('canvas');
-  native.width = original.naturalWidth;
-  native.height = original.naturalHeight;
-  native.getContext('2d').drawImage(original,0,0);
-  native.toBlob(blob=>{
-    native.width = native.height = 1;
+  canvas.toBlob(blob=>{
     if (blob) save(blob,name);
     else status.textContent = 'Не удалось сохранить PNG.';
   },'image/png');
@@ -492,10 +418,6 @@ download.addEventListener('click',()=>{
     stream?.getTracks().forEach(track=>track.stop());
     videoCanvas.width = videoCanvas.height = 1;
     running = exporting = false;
-    if (exact.checked && time>=duration) {
-      original.hidden = false;
-      canvas.style.visibility = 'hidden';
-    }
     status.textContent = message;
     controls();
   }
