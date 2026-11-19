@@ -1,4 +1,4 @@
-import {paper,stroke,measure} from './paint.mjs?v=portrait-edges';
+import {paper,stroke,measure} from './paint.mjs?v=illustration-lines';
 import {restorePlan} from './restore.mjs?v=continuous';
 
 const $ = id => document.getElementById(id);
@@ -297,7 +297,7 @@ async function buildPainting() {
   teto.play().catch(()=>{});
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=portrait-edges',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=illustration-lines',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};

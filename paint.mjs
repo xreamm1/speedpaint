@@ -526,7 +526,29 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
   report('Прокладываю траектории кисти',55);
   const middle = paint(Math.max(4,(photographic?29:30)*scale),Math.max(.35,.95*scale),photographic?.79:.90,photographic?900:475,false);
   const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*(type==='portrait'?4.5:photographic?2.6:.95),true);
-  const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
+  let accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
+  if (type==='illustration') {
+    const colors = pixels(.18);
+    const luminance = (i)=>.299*colors[i]+.587*colors[i+1]+.114*colors[i+2];
+    accents = outline.flatMap(mark=>{
+      if (mark.points.length<5) return [];
+      const samples = [0,.25,.5,.75,1].map(t=>{
+        const [x,y]=mark.points[Math.round(t*(mark.points.length-1))];
+        const center=at(x,y)*4;
+        let dark=center, light=luminance(center);
+        for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const neighbor=at(x+dx,y+dy)*4;
+          if (luminance(neighbor)<luminance(dark)) dark=neighbor;
+          light=Math.max(light,luminance(neighbor));
+        }
+        return {dark,contrast:light-luminance(dark)};
+      });
+      if (samples.filter(({dark,contrast})=>luminance(dark)<115 && contrast>19).length<3) return [];
+      const paintColors=samples.map(({dark})=>'rgb('+colors.subarray(dark,dark+3).join(',')+')');
+      return [{...mark,color:paintColors[2],paintColors,
+        width:Math.max(.8,Math.min(2.3*unit,mark.width*.9)),opacity:.86}];
+    });
+  }
   const byShape=(a,b)=>a.shape-b.shape;
   const foundation=focus ? base : base.filter(mark=>mark.mass);
   const colorStudies=focus ? [] : base.filter(mark=>!mark.mass).sort(byShape);
@@ -543,7 +565,7 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
   const row=mark=>Math.floor(mark.center[1]/(34*unit));
   const local=(a,b)=>byShape(a,b)||a.tone-b.tone||a.pass-b.pass||
     row(a)-row(b)||(row(a)%2 ? b.center[0]-a.center[0] : a.center[0]-b.center[0]);
-  return {areas,stages:[outline,[...foundation,...colorStudies],[...tones.sort(local),...edges.sort(local),...accents]]};
+  return {areas,stages:[outline,[...foundation,...colorStudies],[...tones.sort(local),...edges.sort(local),...(type==='illustration'?[]:accents)]],accents:type==='illustration'?accents:[]};
 }
 
 export function measure(mark) {

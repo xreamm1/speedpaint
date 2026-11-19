@@ -1,6 +1,6 @@
 import {classify,typeNames} from './classify.mjs?v=adaptive';
-import {paper,plan,stroke} from './paint.mjs?v=portrait-edges';
-import {finishPlan} from './finish.mjs?v=portrait-edges';
+import {paper,plan,stroke} from './paint.mjs?v=illustration-lines';
+import {finishPlan} from './finish.mjs?v=illustration-lines';
 
 import {correctionPaths} from './restore.mjs?v=continuous';
 
@@ -16,7 +16,7 @@ self.onmessage = async ({data:{bitmap,brush,detail,focus,exact,quality,requested
     const {type} = classification;
     const typeName = typeNames[type];
     focus ??= classification.focus;
-    const {stages,areas} = plan(reference,brush,detail,focus,report,type);
+    const {stages,areas,accents = []} = plan(reference,brush,detail,focus,report,type);
     report('Рендерю пробный рисунок',72);
     const proof = new OffscreenCanvas(reference.width,reference.height);
     const ctx = proof.getContext('2d',{willReadFrequently:true,alpha:false});
@@ -263,7 +263,9 @@ self.onmessage = async ({data:{bitmap,brush,detail,focus,exact,quality,requested
         }
       }
     }
-    stages.push(refinements);
+    for (const mark of accents) stroke(ctx,mark);
+    if (accents.length) best = ctx.getImageData(0,0,width,height);
+    stages.push([...refinements,...accents]);
     if (exact) report('Прокладываю финальные уточнения вдоль контуров',98);
     const tail = (stages[3].at(-1) || stages[2].at(-1))?.points.at(-1);
     const corrections = exact ? correctionPaths(best,source,tail) : null;
