@@ -259,6 +259,24 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
       return Number((x>0 && x<cols-1 && dark[i-1] && dark[i+1]) ||
         (dark[i-cols] && dark[i+cols]) || false);
     });
+    const horizontal = new Uint8Array(seen.length);
+    const vertical = new Uint8Array(seen.length);
+    function contrast(cell,other) {
+      const a=colorAt(cell), b=colorAt(other);
+      return Math.abs(rgb[a]-rgb[b])+Math.abs(rgb[a+1]-rgb[b+1])+Math.abs(rgb[a+2]-rgb[b+2])>58;
+    }
+    for (let i=0;i<seen.length;i++) {
+      if (i%cols<cols-1) horizontal[i]=contrast(i,i+1);
+      if (i+cols<seen.length) vertical[i]=contrast(i,i+cols);
+    }
+    function crosses(a,b) {
+      const i=Math.min(a,b);
+      if (Math.floor(a/cols)!==Math.floor(b/cols)) {
+        const x=i%cols;
+        return vertical[i] || x>0 && x<cols-1 && vertical[i-1] && vertical[i+1];
+      }
+      return horizontal[i] || horizontal[i-cols] && horizontal[i+cols];
+    }
     const fills = [];
     for (let seed=0;seed<seen.length;seed++) {
       if (seen[seed]) continue;
@@ -274,7 +292,7 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
         minX=Math.min(minX,x);maxX=Math.max(maxX,x);
         minY=Math.min(minY,y);maxY=Math.max(maxY,y);
         for (const next of [x>0?cell-1:-1,x<cols-1?cell+1:-1,y>0?cell-cols:-1,y<rows-1?cell+cols:-1]) {
-          if (next<0 || seen[next] || barrier[next]!==barrier[cell]) continue;
+          if (next<0 || seen[next] || barrier[next]!==barrier[cell] || crosses(cell,next)) continue;
           const n=colorAt(next);
           const delta=Math.abs(rgb[n]-rgb[c])+Math.abs(rgb[n+1]-rgb[c+1])+Math.abs(rgb[n+2]-rgb[c+2]);
           if (delta>46) continue;
@@ -312,12 +330,52 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
       regions.sort((a,b)=>priority(a)-priority(b));
     }
     const labels = new Uint16Array(seen.length);
+    const orphaned = [];
     for (const [i,area] of regions.entries()) {
-      area.clip=smoothMask(area.region,cols,step);
       area.color='rgb('+area.pigment.join(',')+')';
       for (const cell of area.region) labels[cell]=i+1;
     }
-    const marks=regions.flatMap(({region,point,pigment,background,roundness,clip:fill,color})=>{
+    // Keep tiny color fragments available to the coverage pass.
+    for (let i=0;i<labels.length;i++) {
+      if (!labels[i]) orphaned.push(i);
+    }
+    const fringe = new Set(orphaned);
+    for (let head=0;head<orphaned.length;) {
+      const cell=orphaned[head++];
+      if (!fringe.delete(cell)) continue;
+      const cells=[cell];
+      for (const i of cells) {
+        const x=i%cols;
+        for (const next of [x?i-1:-1,x<cols-1?i+1:-1,i-cols,i+cols]) {
+          if (fringe.has(next) && !crosses(i,next) && !contrast(i,next)) {
+            fringe.delete(next);
+            cells.push(next);
+          }
+        }
+      }
+      regions.push({region:cells,clip:smoothMask(cells,cols,step),fringe:true});
+    }
+    for (const area of regions) if (!area.clip) area.clip=smoothMask(area.region,cols,step);
+    const depth = new Uint16Array(labels.length);
+    const queue = [];
+    for (let i=0;i<labels.length;i++) {
+      const label=labels[i], x=i%cols;
+      if (!label) continue;
+      if (!x || x===cols-1 || labels[i-1]!==label || labels[i+1]!==label ||
+          labels[i-cols]!==label || labels[i+cols]!==label) {
+        depth[i]=1;
+        queue.push(i);
+      }
+    }
+    for (let head=0;head<queue.length;head++) {
+      const i=queue[head], x=i%cols;
+      for (const neighbor of [x?i-1:-1,x<cols-1?i+1:-1,i-cols,i+cols]) {
+        if (labels[neighbor]!==labels[i] || depth[neighbor]) continue;
+        depth[neighbor]=depth[i]+1;
+        queue.push(neighbor);
+      }
+    }
+    const marks=regions.filter(area=>!area.fringe).flatMap(({region,point,pigment,background,roundness,clip:fill,color})=>{
       const shape=shapeAt(...point,pigment);
       const width=Math.max(step*2.2,Math.min(52*unit,Math.sqrt(region.length)*step*.38))*brush/100;
       const lane=Math.max(step,width*.88);
@@ -334,7 +392,7 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
         const across=y*dx-x*dy-offset(along);
         const band=Math.round(across/lane);
         if (!bands.has(band)) bands.set(band,[]);
-        bands.get(band).push({along,across,x,y});
+        bands.get(band).push({along,across,depth:depth[cell]});
       }
       const result=[];
       let reverse=false;
@@ -353,7 +411,9 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
               const across=a.across+(b.across-a.across)*t+offset(along)+Math.sin(Math.PI*t)*bend;
               return [along*dx-across*dy,along*dy+across*dx];
             });
-          result.push({clip:fill,points,width:Math.min(length*.74,width*(.93+random()*.14)),color,
+          const clearance=cells[start+Math.floor((i-start)/2)].depth;
+          const localWidth=Math.max(step*1.4,step*(2*clearance-.5));
+          result.push({clip:fill,points,width:Math.min(length*.74,localWidth,width*(.93+random()*.14)),color,
             opacity:.68+random()*.16,pace:.8+random()*.38,pressure:.35,
             shape,mass:region.length>=seen.length*.013});
         }
@@ -382,7 +442,9 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
           }
           if (strength[i]<20) continue;
         }
-        const width = size*(.84+random()*.40);
+        const nearFace=type==='portrait' && focus &&
+          Math.hypot(px-focus[0]*w, py-(focus[1]*h+Math.min(w,h)*.05))<Math.min(w,h)*.23;
+        const width = size*(nearFace?(fine?.62:.53):1)*(.84+random()*.40);
         const bend = (random()-.5)*.55;
         const steps = fine ? 5+Math.floor(random()*6) : 8+Math.floor(random()*7);
         const step = Math.max(.6,width*.23);
@@ -451,8 +513,8 @@ export function plan(source, brush, detail, focus, report = () => {}, type = 'il
   report('Подбираю крупные цветовые пятна',34);
   const {marks:base,shapeAt,...areas} = flats();
   report('Прокладываю траектории кисти',55);
-  const middle = paint(Math.max(4,(type==='photo'||type==='portrait'?38:30)*scale),Math.max(.35,.95*scale),.90,475,false);
-  const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*(type==='portrait'?1.35:.95),true);
+  const middle = paint(Math.max(4,(type==='photo'||type==='portrait'?38:30)*scale),Math.max(.35,.95*scale),.90,type==='portrait'?850:475,false);
+  const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*(type==='portrait'?4.5:.95),true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
   const byShape=(a,b)=>a.shape-b.shape;
   const foundation=focus ? base : base.filter(mark=>mark.mass);
@@ -513,7 +575,7 @@ export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
   ctx.globalAlpha = opacity*opacityScale;
   ctx.lineWidth = width;
   let pigment=color;
-  if (mark.clip) {
+  if (mark.clip && !mark.solid) {
     pigment=ctx.createLinearGradient(...points[0],...points.at(-1));
     pigment.addColorStop(0,color.replace('rgb(','rgba(').replace(')',',.36)'));
     pigment.addColorStop(.21,color);

@@ -16,7 +16,7 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus,
   const at=(x,y)=>4*(Math.max(0,Math.min(width-1,Math.round(x)))+
     width*Math.max(0,Math.min(height-1,Math.round(y))));
   const luma=i=>.30*source[i]+.59*source[i+1]+.11*source[i+2];
-  const stride=Math.max(4,Math.round(Math.max(width,height)/(zone && mode!=='hair' ? 155 : 63)));
+  const stride=Math.max(3,Math.round(Math.max(width,height)/(mode==='feature' || mode==='iris' || mode==='eye-glint' ? 240 : zone && mode!=='hair' ? 155 : 63)));
   const [zx,zy,rx,ry] = zone || [0,0,1,1];
   const candidates=[];
   for(let top=0;top<height;top+=stride) {
@@ -35,11 +35,14 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus,
           const dot=Math.abs(center)>26 && edge<Math.abs(center)*1.8;
           const highlight=light>190 && light>(.30*actual[i]+.59*actual[i+1]+.11*actual[i+2])+14;
           const actualLight=.30*actual[i]+.59*actual[i+1]+.11*actual[i+2];
-          if (mode==='edge' && (edge<16 || light>=actualLight)) continue;
+          if ((mode==='edge' || mode==='feature') && (edge<16 || light>=actualLight)) continue;
           if (mode==='shadow' && (dot || edge>=32 || light>=actualLight || error<13)) continue;
           if ((mode==='light' || mode==='hair') && (dot || light<=actualLight)) continue;
-          if (mode==='texture' && !dot && !highlight) continue;
-          const score=error*Math.min(1,Math.max(mode==='shadow'?.65:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
+          if (mode==='iris' && (light>=actualLight-5 || edge<9 || light>155)) continue;
+          if (mode==='eye-glint' && !highlight) continue;
+          if (mode==='spark' && (!highlight || dot)) continue;
+          if (mode==='texture' && !dot) continue;
+          const score=error*Math.min(1,Math.max(mode==='shadow' || mode==='eye-glint' ? .65:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
           if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight,broad:mode==='shadow'};
         }
       }
@@ -58,25 +61,26 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus,
     if(marks.length>=cap) break;
     if(marks.some(mark=>{const [px,py]=centerOf(mark);return Math.hypot(px-x,py-y)<stride*.75;})) continue;
     const angle=broad ? -.55+.35*Math.sin(x*.039+y*.026) : Math.atan2(gy,gx)+Math.PI/2;
-    const length=stride*(mode==='hair'?1.85:broad?1.10:dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
+    const length=stride*(mode==='eye-glint'?.16:mode==='iris'?.30:mode==='hair'?1.85:broad?1.10:dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
     const dx=Math.cos(angle)*length, dy=Math.sin(angle)*length;
     const normal=Math.max(1,Math.hypot(gx,gy));
     const shift=dot?0:highlight?.8:-1;
     const cx=x+gx/normal*shift, cy=y+gy/normal*shift;
     const channels=[0,0,0];
-    const sampleCount=dot?0:2;
+    const sampleCount=dot || mode==='iris' || mode==='eye-glint' ? 0 : 2;
     for(let j=-sampleCount;j<=sampleCount;j++) {
       const p=at(cx+Math.cos(angle)*j,cy+Math.sin(angle)*j);
       for(let k=0;k<3;k++) channels[k]+=source[p+k];
     }
     let points=[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]];
-    if (mode==='hair') {
+    if (!dot && (mode==='hair' || mode==='edge' || mode==='light' || mode==='feature')) {
       function follow(direction) {
         let px=x, py=y, heading=angle+(direction<0 ? Math.PI : 0);
         const trail=[];
         for (let i=0;i<5;i++) {
           const sx=luma(at(px+2,py))-luma(at(px-2,py));
           const sy=luma(at(px,py+2))-luma(at(px,py-2));
+          if (i>0 && Math.hypot(sx,sy)<7) break;
           if (Math.hypot(sx,sy)>9) {
             const turn=Math.atan2(sy,sx)+Math.PI/2-heading;
             heading+=.27*Math.atan2(Math.sin(2*turn),Math.cos(2*turn));
