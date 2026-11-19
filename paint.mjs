@@ -1,5 +1,7 @@
 export const paper = '#eee7da';
 
+const clipPaths = new WeakMap();
+
 function smoothMask(region,cols,step) {
   const cells=new Set(region);
   const stride=cols+1;
@@ -38,7 +40,7 @@ function smoothMask(region,cols,step) {
     }
     return points.slice(0,-1).filter((_,i)=>keep[i]);
   }
-  const path=new Path2D();
+  const commands=[];
   const rank=[1,0,3,2];
   while(edges.size) {
     const start=edges.keys().next().value;
@@ -64,22 +66,20 @@ function smoothMask(region,cols,step) {
       const t=Math.min(.42,1.15/Math.hypot(b[0]-a[0],b[1]-a[1]));
       return [step*(a[0]+(b[0]-a[0])*t),step*(a[1]+(b[1]-a[1])*t)];
     };
-    path.moveTo(...near(points[0],points.at(-1)));
+    commands.push('M',...near(points[0],points.at(-1)));
     for(let i=0;i<points.length;i++) {
       const [x,y]=points[i];
-      if(i) path.lineTo(...near(points[i],points[i-1]));
-      path.quadraticCurveTo(x*step,y*step,...near(points[i],points[(i+1)%points.length]));
+      if(i) commands.push('L',...near(points[i],points[i-1]));
+      commands.push('Q',x*step,y*step,...near(points[i],points[(i+1)%points.length]));
     }
-    path.closePath();
+    commands.push('Z');
   }
-  return path;
+  return {path:commands.join(' ')};
 }
 
-export function plan(source, brush, detail, focus) {
+export function plan(source, brush, detail, focus, report = () => {}) {
   const {width: w, height: h} = source;
-  const sample = document.createElement('canvas');
-  sample.width = w;
-  sample.height = h;
+  const sample = new OffscreenCanvas(w,h);
   const ctx = sample.getContext('2d', {willReadFrequently:true});
   function pixels(blur) {
     ctx.fillStyle = paper;
@@ -404,9 +404,12 @@ export function plan(source, brush, detail, focus) {
     return marks.sort((a,b)=>b.score-a.score);
   }
 
+  report('Строю контуры и композицию',12);
   const outline = sketch(gradient(pixels(Math.max(.65,unit)),true));
   const scale = brush/100*unit;
+  report('Подбираю крупные цветовые пятна',34);
   const {marks:base,shapeAt} = flats();
+  report('Прокладываю траектории кисти',55);
   const middle = paint(Math.max(4,30*scale),Math.max(.35,.95*scale),.90,475,false);
   const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*.95,true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
@@ -456,7 +459,8 @@ export function position(mark, fraction) {
 export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
   if (mark.clip) {
     ctx.save();
-    ctx.clip(mark.clip,'evenodd');
+    if (!clipPaths.has(mark.clip)) clipPaths.set(mark.clip,new Path2D(mark.clip.path));
+    ctx.clip(clipPaths.get(mark.clip),'evenodd');
   }
   const {points,width,color,opacity} = mark;
   const distance = position(mark,fraction);

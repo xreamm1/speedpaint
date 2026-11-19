@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=focus">
-<script type="module" src="./app.mjs?v=streaks"></script>
+<link rel="stylesheet" href="./style.css?v=preflight">
+<script type="module" src="./app.mjs?v=preflight"></script>
 </head>
 <body>
 <header>
@@ -79,5 +79,13 @@
 </aside>
 </div>
 </main>
+<dialog id="processing" aria-labelledby="processing-title">
+<div class="processing-stage" aria-hidden="true">
+<video id="teto" muted playsinline loop preload="none" src="./teto-birdbrain.webm"></video>
+</div>
+<h2 id="processing-title">Подготовка рисунка</h2>
+<p id="processing-step" role="status">Анализирую изображение…</p>
+<progress id="processing-progress" max="100" value="0" aria-label="Прогресс подготовки"></progress>
+</dialog>
 </body>
 </html>

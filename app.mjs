@@ -1,5 +1,4 @@
-import {paper,plan,stroke,measure} from './paint.mjs?v=streaks';
-import {finishPlan} from './finish.mjs?v=streaks';
+import {paper,plan,stroke,measure} from './paint.mjs?v=preflight';
 import {restorePlan} from './restore.mjs?v=streaks';
 
 const $ = id => document.getElementById(id);
@@ -17,6 +16,11 @@ const chooseUpload = $('choose-upload');
 const upload = $('upload');
 const exact = $('exact');
 const editor = $('editor');
+const processing = $('processing');
+const teto = $('teto');
+const processingStep = $('processing-step');
+const processingProgress = $('processing-progress');
+processing.addEventListener('cancel',event=>event.preventDefault());
 const uploadStatus = $('upload-status');
 const phases = [...document.querySelectorAll('ol li')];
 const ctx = canvas.getContext('2d');
@@ -33,7 +37,7 @@ const mime = typeof MediaRecorder !== 'undefined' && canvas.captureStream &&
 let ready = false, loading = false, running = false, exporting = false;
 let time = 0, frame = 0, previous = 0, generation = 0;
 let sequence = [], phase = 0, index = 0, photoName = 'speedpaint';
-let original, restoration, focus;
+let original, restoration, focus, prepared;
 
 function controls() {
   const busy = loading || exporting;
@@ -80,7 +84,7 @@ function showFocus() {
   ctx.stroke();
 }
 async function load(image) {
-  if (!image || exporting) return;
+  if (!image || loading || exporting) return;
   const ticket = ++generation;
   const url = URL.createObjectURL(image);
   cancelAnimationFrame(frame);
@@ -105,6 +109,7 @@ async function load(image) {
     ref.fillRect(0,0,reference.width,reference.height);
     ref.drawImage(picture,0,0,reference.width,reference.height);
     original=picture;
+    prepared=null;
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
@@ -238,10 +243,59 @@ function schedule(marks,stage,tail) {
   });
   return {marks,timing,end,tail};
 }
+async function buildPainting() {
+  const settings = [+brush.value,+detail.value,focus];
+  const key = JSON.stringify(settings);
+  if (prepared?.key===key) return;
+  loading = true;
+  controls();
+  processingStep.textContent = 'Анализирую изображение…';
+  processingProgress.value = 3;
+  processing.showModal();
+  teto.play().catch(()=>{});
+  const opened = performance.now();
+  let worker;
+  try {
+    worker = new Worker(new URL('./preflight.mjs?v=preflight',import.meta.url),{type:'module'});
+    const bitmap = await createImageBitmap(reference);
+    const stages = await new Promise((resolve,reject)=>{
+      worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
+      worker.onmessage = ({data})=>{
+        if (data.error) reject(new Error(data.error));
+        else if (data.stages) resolve(data.stages);
+        else {
+          processingStep.textContent = data.label;
+          processingProgress.value = data.value;
+        }
+      };
+      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2]},[bitmap]);
+    });
+    prepared = {key,stages};
+    processingStep.textContent = 'Готово. Начинаю рисовать…';
+    processingProgress.value = 100;
+    if (!reduceMotion.matches) {
+      await new Promise(resolve=>setTimeout(resolve,Math.max(0,3100-(performance.now()-opened))));
+      teto.pause();
+      const distance = innerHeight-teto.getBoundingClientRect().top+60;
+      await teto.animate([
+        {transform:'translate(0,0) rotate(0deg)',offset:0},
+        {transform:'translate(4px,-12px) rotate(7deg)',offset:.19,easing:'cubic-bezier(.55,.04,.92,.44)'},
+        {transform:`translate(86px,${distance}px) rotate(71deg)`,offset:1}
+      ],{duration:760}).finished;
+    }
+  } finally {
+    worker?.terminate();
+    teto.pause();
+    processing.close();
+    teto.currentTime = 0;
+    loading = false;
+    controls();
+  }
+}
 function prepare() {
   sequence=[];
   limits=exact.checked ? [0,.20,.36,.62,restoreAt] : [0,.20,.36,.72,1];
-  for (const [stage,marks] of plan(reference,+brush.value,+detail.value,focus).entries()) {
+  for (const [stage,marks] of prepared.stages.entries()) {
     sequence.push(schedule(marks,stage,sequence.at(-1)?.tail));
   }
   wipe();
@@ -257,7 +311,6 @@ function render(fraction) {
     while (index<marks.length) stroke(ink,marks[index++]);
     phase++;
     index = 0;
-    if (phase===3) sequence.push(schedule(finishPlan(ink,reference,+detail.value),phase,sequence[2].tail));
   }
   const {marks,timing,end} = sequence[phase];
   const stopAt=limits[phase+1];
@@ -323,7 +376,8 @@ function play(rate, done) {
   }
   frame = requestAnimationFrame(tick);
 }
-start.addEventListener('click',()=>{
+start.addEventListener('click',async()=>{
+  if (loading || exporting) return;
   if (running) {
     cancelAnimationFrame(frame);
     running = false;
@@ -331,7 +385,16 @@ start.addEventListener('click',()=>{
     controls();
     return;
   }
-  if (!time || time>=duration) prepare();
+  if (!time || time>=duration) {
+    try {
+      await buildPainting();
+      prepare();
+    } catch (error) {
+      console.error(error);
+      status.textContent = 'Не удалось подготовить рисунок. Попробуйте ещё раз.';
+      return;
+    }
+  }
   status.textContent = 'Рисую…';
   play(()=>+speed.value);
 });
