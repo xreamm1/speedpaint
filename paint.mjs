@@ -1,3 +1,5 @@
+import {staffGroups} from './classify.mjs?v=adaptive';
+
 export const paper = '#eee7da';
 
 const clipPaths = new WeakMap();
@@ -77,7 +79,7 @@ function smoothMask(region,cols,step) {
   return {path:commands.join(' ')};
 }
 
-export function plan(source, brush, detail, focus, report = () => {}) {
+export function plan(source, brush, detail, focus, report = () => {}, type = 'illustration') {
   const {width: w, height: h} = source;
   const sample = new OffscreenCanvas(w,h);
   const ctx = sample.getContext('2d', {willReadFrequently:true});
@@ -424,13 +426,33 @@ export function plan(source, brush, detail, focus, report = () => {}) {
   }
 
   report('Строю контуры и композицию',12);
+  const inkMode=type==='ink' || type==='score';
+  if (inkMode) {
+    const gray=pixels(Math.max(.30,unit*.45));
+    const edges=gradient(gray,true);
+    const staff=type==='score' ? staffGroups({width:w,height:h,data:gray}) : [];
+    const rules=staff.map(({left,right,top,bottom})=>({
+      points:[[left,(top+bottom)/2],[right,(top+bottom)/2]], width:Math.max(1,bottom-top+1),
+      color:'#242020',opacity:.96
+    }));
+    for (const {left,right,top,bottom} of staff) {
+      for (let y=Math.max(0,top-1);y<Math.min(h,bottom+2);y++) {
+        for (let x=left;x<=right;x++) {
+          const index=y*w+x;
+          if (Math.abs(Math.cos(edges.angle[index]))<.40) edges.strength[index]=0;
+        }
+      }
+    }
+    const pen=sketch(edges).map(mark=>({...mark,color:'#242020',opacity:.92}));
+    return {stages:[rules.length?rules:pen,rules.length?pen:[],[],[]]};
+  }
   const outline = sketch(gradient(pixels(Math.max(.65,unit)),true));
   const scale = brush/100*unit;
   report('Подбираю крупные цветовые пятна',34);
   const {marks:base,shapeAt,...areas} = flats();
   report('Прокладываю траектории кисти',55);
-  const middle = paint(Math.max(4,30*scale),Math.max(.35,.95*scale),.90,475,false);
-  const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*.95,true);
+  const middle = paint(Math.max(4,(type==='photo'||type==='portrait'?38:30)*scale),Math.max(.35,.95*scale),.90,475,false);
+  const fine = paint(Math.max(1.8,(10-detail*.063)*scale),Math.max(.15,.28*scale),.86,150+detail*(type==='portrait'?1.35:.95),true);
   const accents = outline.slice(0,Math.round(detail/3)).map(mark=>({...mark, opacity:mark.opacity*.36}));
   const byShape=(a,b)=>a.shape-b.shape;
   const foundation=focus ? base : base.filter(mark=>mark.mass);

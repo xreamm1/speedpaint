@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0b0b0d">
 <title>Спидпеинт</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css?v=continuous">
-<script type="module" src="./app.mjs?v=portrait"></script>
+<link rel="stylesheet" href="./style.css?v=adaptive">
+<script type="module" src="./app.mjs?v=adaptive"></script>
 </head>
 <body>
 <header>
@@ -79,6 +79,13 @@
 </section>
 <aside aria-label="Настройки кисти">
 <h2>Настройки</h2>
+<label class="setting" for="image-type">Тип изображения</label>
+<select id="image-type">
+<option value="auto">Авто</option><option value="ink">Лайн-арт и текст</option>
+<option value="score">Ноты</option><option value="illustration">Иллюстрация</option>
+<option value="portrait">Фотопортрет</option><option value="photo">Фотография</option>
+</select>
+<output id="detected-type"></output>
 <label class="setting" for="brush">Размер кисти <output for="brush">100%</output></label>
 <input id="brush" type="range" min="60" max="160" step="5" value="100">
 <label class="setting" for="detail">Детализация <output for="detail">65%</output></label>

@@ -1,4 +1,4 @@
-import {paper,stroke,measure} from './paint.mjs?v=portrait';
+import {paper,stroke,measure} from './paint.mjs?v=adaptive';
 import {restorePlan} from './restore.mjs?v=continuous';
 
 const $ = id => document.getElementById(id);
@@ -9,6 +9,8 @@ const download = $('export');
 const savePng = $('save-png');
 const exact = $('exact');
 const quality = $('quality');
+const imageType = $('image-type');
+const detectedType = $('detected-type');
 const demo = $('demo');
 const demoVideos = [...demo.querySelectorAll('video')];
 const pausedDemos = new Set();
@@ -58,7 +60,7 @@ function controls() {
   canvas.classList.toggle('can-pick',ready && !busy && !running && time===0);
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
-  quality.disabled = exact.disabled = busy || running || time>0 && !complete;
+  imageType.disabled = quality.disabled = exact.disabled = busy || running || time>0 && !complete;
   start.textContent = running && !exporting ? 'Пауза' : complete ? 'Заново' : time>0 ? 'Продолжить' : 'Старт';
   start.classList.toggle('primary',!complete && !exporting);
 }
@@ -133,6 +135,7 @@ async function load(image) {
     original.alt = 'Готовый рисунок';
     surface.append(original);
     prepared=null;
+    detectedType.textContent = '';
     filename.textContent = image.name;
     photoName = image.name.replace(/\.[^.]+$/, '') || 'speedpaint';
     source.hidden = canvas.hidden = replace.hidden = playback.hidden = false;
@@ -271,6 +274,10 @@ function updatePngLabel() {
   const size = exact.checked ? [original.naturalWidth,original.naturalHeight] : [canvas.width,canvas.height];
   savePng.textContent = (exact.checked ? 'Оригинал в PNG' : 'Рисунок в PNG') + ' · ' + size.join(' × ');
 }
+imageType.addEventListener('change',()=>{
+  detectedType.textContent = '';
+  if (time) reset.click();
+});
 quality.addEventListener('change',()=>{if(time) reset.click();});
 exact.addEventListener('change',()=>{
   if (!ready) return;
@@ -278,7 +285,7 @@ exact.addEventListener('change',()=>{
   updatePngLabel();
 });
 async function buildPainting() {
-  const settings = [+brush.value,+detail.value,focus,exact.checked,quality.checked];
+  const settings = [+brush.value,+detail.value,focus,exact.checked,quality.checked,imageType.value];
   const key = JSON.stringify(settings);
   if (prepared?.key===key) return;
   loading = true;
@@ -290,7 +297,7 @@ async function buildPainting() {
   teto.play().catch(()=>{});
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=portrait',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=adaptive',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
@@ -302,9 +309,10 @@ async function buildPainting() {
           processingProgress.value = data.value;
         }
       };
-      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3],quality:settings[4]},[bitmap]);
+      worker.postMessage({bitmap,brush:settings[0],detail:settings[1],focus:settings[2],exact:settings[3],quality:settings[4],requested:settings[5]},[bitmap]);
     });
     prepared = {key,...result};
+    detectedType.textContent = result.typeName;
     processingStep.textContent = 'Подготовка завершена';
     processingProgress.value = 100;
   } finally {

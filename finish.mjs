@@ -1,5 +1,5 @@
 // Use the remaining error to place accents. Each mark mixes a local pigment.
-export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus, zone) {
+export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus, zone, photographic) {
   const {regions,labels,cols,step} = areas;
   const {width,height}=reference;
   let sample=ctx;
@@ -48,6 +48,7 @@ export function finishPlan(ctx, reference, detail, mode, areas, prioritizeFocus,
   }
   for (const pick of candidates) {
     pick.area=labels[Math.floor(pick.y/step)*cols+Math.floor(pick.x/step)];
+    if (photographic && !zone && regions[pick.area-1]?.background) pick.score*=.75;
   }
   candidates.sort((a,b)=>(prioritizeFocus ? Number(b.area===1)-Number(a.area===1) : 0) || b.score-a.score);
   const marks=[];
