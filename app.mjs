@@ -14,7 +14,6 @@ let demoVisible=false;
 const demoFold = $('demo-fold');
 const chooseUpload = $('choose-upload');
 const upload = $('upload');
-const exact = $('exact');
 const editor = $('editor');
 const processing = $('processing');
 const teto = $('teto');
@@ -28,7 +27,7 @@ const reference = document.createElement('canvas');
 const painted = document.createElement('canvas');
 const ink = painted.getContext('2d',{alpha:false});
 const restoreAt = .70;
-let limits = [0, .20, .36, .72, 1];
+const limits = [0,.20,.36,.62,restoreAt];
 const duration = 64000;
 phases.forEach((item,i)=>item.style.setProperty('--stage',limits[i]*100+'%'));
 const formats = ['video/webm;codecs=vp8','video/mp4','video/webm'];
@@ -48,7 +47,6 @@ function controls() {
   savePng.disabled = !ready || busy || !complete;
   downloads.hidden = !complete && !exporting;
   file.disabled = replace.disabled = choose.disabled = chooseUpload.disabled = busy;
-  exact.disabled = busy || running || (time>0 && !complete);
   canvas.classList.toggle('can-pick',ready && !busy && !running && time===0);
   brush.disabled = detail.disabled = exporting || running || time>0;
   speed.disabled = exporting;
@@ -158,7 +156,6 @@ canvas.addEventListener('click',event=>{
   showFocus();
   status.textContent='Точка старта выбрана. Нажмите «Старт».';
 });
-exact.addEventListener('change',()=>{if(time) reset.click();});
 for (const video of demoVideos) {
   const card=video.closest('figure');
   const button=card.querySelector('button');
@@ -263,7 +260,7 @@ async function buildPainting() {
   const opened = performance.now();
   let worker;
   try {
-    worker = new Worker(new URL('./preflight.mjs?v=precision',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./preflight.mjs?v=refinement',import.meta.url),{type:'module'});
     const bitmap = await createImageBitmap(reference);
     const result = await new Promise((resolve,reject)=>{
       worker.onerror = event=>{event.preventDefault(); reject(new Error(event.message));};
@@ -294,7 +291,6 @@ async function buildPainting() {
 }
 function prepare() {
   sequence=[];
-  limits=exact.checked ? [0,.20,.36,.62,restoreAt] : [0,.20,.36,.72,1];
   for (const [stage,marks] of prepared.stages.entries()) {
     sequence.push(schedule(marks,stage,sequence.at(-1)?.tail));
   }
@@ -317,7 +313,7 @@ function render(fraction) {
   const value = end*(Math.min(fraction,stopAt)-limits[phase])/(stopAt-limits[phase]);
   while (index<marks.length && (timing[index].end<=value+1e-7 || fraction>=stopAt)) stroke(ink,marks[index++]);
   ctx.drawImage(painted,0,0);
-  if (exact.checked && fraction>=restoreAt) {
+  if (fraction>=restoreAt) {
     restoration=restorePlan(ctx,original,prepared.corrections);
     restoration(Math.min(1,(fraction-restoreAt)/(1-restoreAt)));
     updateProgress(fraction);
@@ -364,7 +360,7 @@ function play(rate, done) {
     }
     previous = now;
     render(time/duration);
-    if (time>=duration && exact.checked) {
+    if (time>=duration) {
       ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.drawImage(original,0,0,canvas.width,canvas.height);
       if (!exporting) {
@@ -426,19 +422,12 @@ function save(blob, name) {
 }
 savePng.addEventListener('click',()=>{
   const name = photoName+'-final.png';
-  if (exact.checked) {
-    const native = document.createElement('canvas');
-    native.width = original.naturalWidth;
-    native.height = original.naturalHeight;
-    native.getContext('2d').drawImage(original,0,0);
-    native.toBlob(blob=>{
-      native.width = native.height = 1;
-      if (blob) save(blob,name);
-      else status.textContent = 'Не удалось сохранить PNG.';
-    },'image/png');
-    return;
-  }
-  canvas.toBlob(blob=>{
+  const native = document.createElement('canvas');
+  native.width = original.naturalWidth;
+  native.height = original.naturalHeight;
+  native.getContext('2d').drawImage(original,0,0);
+  native.toBlob(blob=>{
+    native.width = native.height = 1;
     if (blob) save(blob,name);
     else status.textContent = 'Не удалось сохранить PNG.';
   },'image/png');
@@ -457,7 +446,7 @@ download.addEventListener('click',()=>{
     stream?.getTracks().forEach(track=>track.stop());
     videoCanvas.width = videoCanvas.height = 1;
     running = exporting = false;
-    if (time>=duration && exact.checked) {
+    if (time>=duration) {
       original.hidden = false;
       canvas.style.visibility = 'hidden';
     }

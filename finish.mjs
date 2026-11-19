@@ -1,5 +1,5 @@
 // Use the remaining error to place accents. Each mark mixes a local pigment.
-export function finishPlan(ctx, reference, detail) {
+export function finishPlan(ctx, reference, detail, fillGaps = false) {
   const {width,height}=reference;
   let sample=ctx;
   if(ctx.canvas.width!==width || ctx.canvas.height!==height) {
@@ -31,8 +31,8 @@ export function finishPlan(ctx, reference, detail) {
           const edge=Math.hypot(gx,gy);
           const dot=Math.abs(center)>26 && edge<Math.abs(center)*1.8;
           const highlight=light>190 && light>(.30*actual[i]+.59*actual[i+1]+.11*actual[i+2])+14;
-          const score=error*Math.min(1,Math.max(edge,Math.abs(center))/38)*(highlight?1.35:1);
-          if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight};
+          const score=error*Math.min(1,Math.max(fillGaps?.46:0,Math.max(edge,Math.abs(center))/38))*(highlight?1.35:1);
+          if(score>13 && (!pick || score>pick.score)) pick={x,y,gx,gy,score,dot,highlight,broad:fillGaps && edge<16 && Math.abs(center)<12};
         }
       }
       if(pick) candidates.push(pick);
@@ -42,11 +42,11 @@ export function finishPlan(ctx, reference, detail) {
   const marks=[];
   const cap=32+Math.round(detail*.92);
   const centerOf=({points})=>points[Math.floor(points.length/2)];
-  for(const {x,y,gx,gy,score,dot,highlight} of candidates) {
+  for(const {x,y,gx,gy,score,dot,highlight,broad} of candidates) {
     if(marks.length>=cap) break;
     if(marks.some(mark=>{const [px,py]=centerOf(mark);return Math.hypot(px-x,py-y)<stride*.75;})) continue;
     const angle=Math.atan2(gy,gx)+Math.PI/2;
-    const length=stride*(dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
+    const length=stride*(broad?1.10:dot?.30:.24+(highlight?.62:.34)*Math.abs(Math.sin(x*4.7+y*8.6)));
     const dx=Math.cos(angle)*length, dy=Math.sin(angle)*length;
     const normal=Math.max(1,Math.hypot(gx,gy));
     const shift=dot?0:highlight?.8:-1;
@@ -59,7 +59,7 @@ export function finishPlan(ctx, reference, detail) {
     }
     marks.push({points:[[x-dx,y-dy],[x,y],[x+dx-dy*.20,y+dy+dx*.20]],
       color:'rgb('+channels.map(c=>Math.round(c/(2*sampleCount+1))).join(',')+')',
-      width:Math.max(.72,stride*(dot?.09:.18)),opacity:Math.min(highlight?.86:.70,.36+score/225),pressure:.52});
+      width:Math.max(.72,stride*(broad?.52:dot?.09:.18)),opacity:Math.min(highlight?.86:.70,.36+score/225),pressure:.52});
   }
   const ordered=[];
   let tip=marks[0]?.points[0];
