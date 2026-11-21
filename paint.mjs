@@ -1,3 +1,4 @@
+import {drawHand} from './hand.mjs';
 import {staffGroups} from './classify.mjs?v=adaptive';
 
 export const paper = '#eee7da';
@@ -593,7 +594,56 @@ export function position(mark, fraction) {
   return low+(distance-arc[low])/(arc[high]-arc[low]);
 }
 
+const rasterMasks=new WeakMap();
+const strokeTile=new OffscreenCanvas(1,1);
+const tileContext=strokeTile.getContext('2d');
+function maskedHand(ctx,mark,fraction,area){
+  let mask=rasterMasks.get(area);
+  if(!mask){
+    mask=new OffscreenCanvas(ctx.canvas.width,ctx.canvas.height);
+    const maskCtx=mask.getContext('2d');
+    maskCtx.scale(area.sx,area.sy);
+    maskCtx.fill(new Path2D(area.path),'evenodd');
+    rasterMasks.set(area,mask);
+  }
+  let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+  for(const [x,y] of mark.points){
+    left=Math.min(left,x);right=Math.max(right,x);
+    top=Math.min(top,y);bottom=Math.max(bottom,y);
+  }
+  const margin=mark.width+Math.max(right-left,bottom-top)*.13+2;
+  const x=Math.max(0,Math.floor(left-margin)),y=Math.max(0,Math.floor(top-margin));
+  const w=Math.min(mask.width,Math.ceil(right+margin))-x;
+  const h=Math.min(mask.height,Math.ceil(bottom+margin))-y;
+  if(w<=0||h<=0)return;
+  if(strokeTile.width<w||strokeTile.height<h){
+    strokeTile.width=Math.max(strokeTile.width,w);
+    strokeTile.height=Math.max(strokeTile.height,h);
+  }
+  tileContext.clearRect(0,0,w,h);
+  tileContext.save();
+  tileContext.translate(-x,-y);
+  drawHand(tileContext,mark,fraction);
+  tileContext.restore();
+  tileContext.globalCompositeOperation='destination-in';
+  tileContext.drawImage(mask,x,y,w,h,0,0,w,h);
+  tileContext.globalCompositeOperation='source-over';
+  ctx.drawImage(strokeTile,0,0,w,h,x,y,w,h);
+}
+
 export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
+  if(mark.sketchFade){
+    ctx.save();ctx.fillStyle=paper;ctx.globalAlpha=mark.opacity*fraction;
+    ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);ctx.restore();return;
+  }
+  if (mark.seed!==undefined) {
+    ctx.save();
+    const area=mark.material||mark.area;
+    if(area)maskedHand(ctx,mark,fraction,area);
+    else drawHand(ctx,mark,fraction);
+    ctx.restore();
+    return;
+  }
   if (mark.fill) {
     ctx.fillStyle=mark.fill;
     ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
@@ -691,7 +741,7 @@ export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
     ctx.lineWidth=width*.62;
     ctx.globalAlpha=opacity*opacityScale*.63;
     ctx.stroke();
-  } else if (mark.pressure!==undefined && points.length>1) {
+  } else if ((mark.pressure!==undefined || mark.taper!==undefined) && points.length>1) {
     // Build a single pencil silhouette so overlapping segments keep their translucency.
     const left = [], right = [];
     for (let i=0; i<=Math.ceil(distance); i++) {
@@ -702,9 +752,9 @@ export function stroke(ctx, mark, fraction = 1, opacityScale = 1) {
       const before = points[Math.max(0,i-2)], after = points[Math.min(points.length-1,i+1)];
       const heading = Math.atan2(after[1]-before[1],after[0]-before[0])+Math.PI/2;
       const u = Math.min(i,distance)/(points.length-1);
-      const contact=mark.clip?.55:mark.paintColors?.48:.20;
+      const contact=mark.taper ?? (mark.clip?.55:mark.paintColors?.48:.20);
       const radius = width*.5*(contact+(1-contact)*Math.pow(Math.sin(Math.PI*u),.52))*
-        (.83+.17*Math.sin(i*.49+mark.pressure*6));
+        (mark.taper!==undefined ? 1 : .83+.17*Math.sin(i*.49+mark.pressure*6));
       const dx = Math.cos(heading)*radius, dy = Math.sin(heading)*radius;
       left.push([x+dx,y+dy]);
       right.push([x-dx,y-dy]);
